@@ -10,6 +10,8 @@
         "webmozart/assert": "^1.11"
     },
     "require-dev": {
+        "doctrine/coding-standard": "^13.0",
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^9.6.25"
     },
     "license": "BSD-3-Clause",
@@ -35,6 +37,9 @@
         "preferred-install": "dist",
         "platform": {
             "php": "7.4.0"
+        },
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
         }
     }
 }
