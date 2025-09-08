@@ -1,0 +1,40 @@
+{
+    "name": "thephpf/attestation",
+    "description": "A PHP library to aid in verifying artifact attestations",
+    "type": "library",
+    "require": {
+        "php": "^7.4||^8.0",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "composer/composer": "^2.2",
+        "webmozart/assert": "^1.11"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.6.25"
+    },
+    "license": "BSD-3-Clause",
+    "autoload": {
+        "psr-4": {
+            "ThePHPFoundation\\Attestation\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "ThePHPFoundation\\UnitTest\\Attestation\\": "test/unit",
+            "ThePHPFoundation\\IntegrationTest\\Attestation\\": "test/integration"
+        }
+    },
+    "authors": [
+        {
+            "name": "James Titcumb",
+            "email": "james@asgrim.com"
+        }
+    ],
+    "config": {
+        "sort-packages": true,
+        "preferred-install": "dist",
+        "platform": {
+            "php": "7.4.0"
+        }
+    }
+}
