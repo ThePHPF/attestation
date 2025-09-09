@@ -2,17 +2,23 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\IntegrationTest\Attestation;
+namespace ThePhpFoundation\IntegrationTest\Attestation;
 
 use PHPUnit\Framework\TestCase;
-use ThePHPFoundation\Attestation\FilenameWithChecksum;
-use ThePHPFoundation\Attestation\Problem\MissingAttestation;
-use ThePHPFoundation\Attestation\VerifyAttestationWithOpenSsl;
+use ThePhpFoundation\Attestation\Extension;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\Problem\DigestMismatch;
+use ThePhpFoundation\Attestation\Problem\IssuerCertificateVerificationFailed;
+use ThePhpFoundation\Attestation\Problem\MismatchingExtensionValues;
+use ThePhpFoundation\Attestation\Problem\MissingAttestation;
+use ThePhpFoundation\Attestation\Problem\NoIssuerCertificateInTrustedRoot;
+use ThePhpFoundation\Attestation\Problem\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\VerifyAttestationWithOpenSsl;
 
-/** @covers \ThePHPFoundation\Attestation\VerifyAttestationWithOpenSsl */
 class VerifyAttestationWithOpenSslTest extends TestCase
 {
-    private const PIE_PHAR = __DIR__ . '/../fixture/pie.phar';
+    private const GENUINE_PIE_PHAR                         = __DIR__ . '/../fixture/genuine-pie.phar';
+    private const PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER = __DIR__ . '/../fixture/pie-with-attestation-for-different-owner.phar';
 
     private VerifyAttestationWithOpenSsl $verifier;
 
@@ -24,14 +30,69 @@ class VerifyAttestationWithOpenSslTest extends TestCase
     public function testSuccessfulVerification(): void
     {
         $this->expectNotToPerformAssertions();
-        $this->verifier->verify(FilenameWithChecksum::fromFilename(self::PIE_PHAR));
+        $this->verifier->verify(
+            FilenameWithChecksum::fromFilename(self::GENUINE_PIE_PHAR),
+            'php',
+            'pie.phar',
+            [
+                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+            ],
+        );
     }
 
     public function testMissingAttestation(): void
     {
         $this->expectException(MissingAttestation::class);
-        $this->verifier->verify(FilenameWithChecksum::fromFilename(__FILE__));
+        $this->verifier->verify(
+            FilenameWithChecksum::fromFilename(__FILE__),
+            'php',
+            'pie.phar',
+            [
+                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+            ],
+        );
     }
 
-    // @todo bunch more tests
+    public function testArtifactWithAttestationFromDifferentOwner(): void
+    {
+        $this->expectException(MismatchingExtensionValues::class);
+        $this->verifier->verify(
+            FilenameWithChecksum::fromFilename(self::PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER),
+            'asgrim',
+            'pie.phar',
+            [
+                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+            ],
+        );
+    }
+
+    public function testCertificateWasNotVerifiedFromTrustedRoot(): void
+    {
+        $this->expectException(IssuerCertificateVerificationFailed::class);
+        self::markTestIncomplete();
+    }
+
+    public function testCertificateWasNotFoundInAnyTrustedRoot(): void
+    {
+        $this->expectException(NoIssuerCertificateInTrustedRoot::class);
+        self::markTestIncomplete();
+    }
+
+    public function testDsseEnvelopetSignatureVerificationFailed(): void
+    {
+        $this->expectException(SignatureVerificationFailed::class);
+        self::markTestIncomplete();
+    }
+
+    public function testDigestMismatchInAttestation(): void
+    {
+        $this->expectException(DigestMismatch::class);
+        self::markTestIncomplete();
+    }
 }

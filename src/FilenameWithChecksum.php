@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\Attestation;
+namespace ThePhpFoundation\Attestation;
 
 use Webmozart\Assert\Assert;
 

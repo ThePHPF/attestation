@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\Attestation\Problem;
+namespace ThePhpFoundation\Attestation\Problem;
 
 use Throwable;
 

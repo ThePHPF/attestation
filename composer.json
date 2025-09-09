@@ -17,13 +17,13 @@
     "license": "BSD-3-Clause",
     "autoload": {
         "psr-4": {
-            "ThePHPFoundation\\Attestation\\": "src/"
+            "ThePhpFoundation\\Attestation\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ThePHPFoundation\\UnitTest\\Attestation\\": "test/unit",
-            "ThePHPFoundation\\IntegrationTest\\Attestation\\": "test/integration"
+            "ThePhpFoundation\\UnitTest\\Attestation\\": "test/unit",
+            "ThePhpFoundation\\IntegrationTest\\Attestation\\": "test/integration"
         }
     },
     "authors": [

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\Attestation\Problem;
+namespace ThePhpFoundation\Attestation\Problem;
 
 use RuntimeException;
-use ThePHPFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
 
 use function sprintf;
 

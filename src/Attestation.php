@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\Attestation;
+namespace ThePhpFoundation\Attestation;
 
 use Webmozart\Assert\Assert;
 
 use function base64_decode;
 use function wordwrap;
 
-/** @internal This is not public API for PIE, so should not be depended upon unless you accept the risk of BC breaks */
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class Attestation
 {
     /** @var non-empty-string */

@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace ThePHPFoundation\Attestation;
+namespace ThePhpFoundation\Attestation;
 
 use Composer\Downloader\TransportException;
 use Composer\Factory;
 use Composer\IO\NullIO;
 use Composer\Util\AuthHelper;
 use Composer\Util\HttpDownloader;
-use ThePHPFoundation\Attestation\Problem\DigestMismatch;
-use ThePHPFoundation\Attestation\Problem\InvalidDerEncodedStringLength;
-use ThePHPFoundation\Attestation\Problem\InvalidSubjectDefinition;
-use ThePHPFoundation\Attestation\Problem\IssuerCertificateVerificationFailed;
-use ThePHPFoundation\Attestation\Problem\MismatchingExtensionValues;
-use ThePHPFoundation\Attestation\Problem\MissingAttestation;
-use ThePHPFoundation\Attestation\Problem\NoIssuerCertificateInTrustedRoot;
-use ThePHPFoundation\Attestation\Problem\NoOpenSsl;
-use ThePHPFoundation\Attestation\Problem\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Problem\DigestMismatch;
+use ThePhpFoundation\Attestation\Problem\InvalidDerEncodedStringLength;
+use ThePhpFoundation\Attestation\Problem\InvalidSubjectDefinition;
+use ThePhpFoundation\Attestation\Problem\IssuerCertificateVerificationFailed;
+use ThePhpFoundation\Attestation\Problem\MismatchingExtensionValues;
+use ThePhpFoundation\Attestation\Problem\MissingAttestation;
+use ThePhpFoundation\Attestation\Problem\NoIssuerCertificateInTrustedRoot;
+use ThePhpFoundation\Attestation\Problem\NoOpenSsl;
+use ThePhpFoundation\Attestation\Problem\SignatureVerificationFailed;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -43,20 +43,11 @@ use function wordwrap;
 
 use const OPENSSL_ALGO_SHA256;
 
-/** @todo interface once stabilised */
-class VerifyAttestationWithOpenSsl
+class VerifyAttestationWithOpenSsl implements VerifyAttestation
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../resources/trusted-root.jsonl';
 
     private const GITHUB_API_URL = 'https://api.github.com';
-
-    // @todo un-hardcode these
-    /** @link https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md#136141572641--fulcio */
-    private const ATTESTATION_CERTIFICATE_EXPECTED_EXTENSION_VALUES = [
-        '1.3.6.1.4.1.57264.1.8' => 'https://token.actions.githubusercontent.com',
-        '1.3.6.1.4.1.57264.1.12' => 'https://github.com/php/pie',
-        '1.3.6.1.4.1.57264.1.16' => 'https://github.com/php',
-    ];
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -96,9 +87,14 @@ class VerifyAttestationWithOpenSsl
         );
     }
 
-    public function verify(FilenameWithChecksum $file): void
-    {
-        $attestations = $this->downloadAttestations($file);
+    /** @inheritDoc */
+    public function verify(
+        FilenameWithChecksum $file,
+        string $owner,
+        string $expectedSubjectName,
+        array $extensionsToVerify
+    ): void {
+        $attestations = $this->downloadAttestations($file, $owner);
 
         foreach ($attestations as $attestationIndex => $attestation) {
             /**
@@ -114,9 +110,9 @@ class VerifyAttestationWithOpenSsl
              */
             $this->assertCertificateSignedByTrustedRoot($attestation);
 
-            $this->assertCertificateExtensionClaims($attestation);
+            $this->assertCertificateExtensionClaims($attestation, $extensionsToVerify);
 
-            $this->assertDigestFromAttestationMatchesActual($file, $attestation);
+            $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $attestation);
 
             $this->verifyDsseEnvelopeSignature($attestationIndex, $attestation);
         }
@@ -225,7 +221,8 @@ class VerifyAttestationWithOpenSsl
         throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
     }
 
-    private function assertCertificateExtensionClaims(Attestation $attestation): void
+    /** @param array<Extension::*, string> $extensions */
+    private function assertCertificateExtensionClaims(Attestation $attestation, array $extensions): void
     {
         $attestationCertificateInfo = openssl_x509_parse($attestation->certificate);
         Assert::isArray($attestationCertificateInfo);
@@ -239,7 +236,7 @@ class VerifyAttestationWithOpenSsl
          * Check the extension values are what we expect; these are hard-coded, as we don't expect them
          * to change unless the namespace/repo name change, etc.
          */
-        foreach (self::ATTESTATION_CERTIFICATE_EXPECTED_EXTENSION_VALUES as $extension => $expectedValue) {
+        foreach ($extensions as $extension => $expectedValue) {
             Assert::keyExists($attestationCertificateInfo['extensions'], $extension);
             Assert::stringNotEmpty($attestationCertificateInfo['extensions'][$extension]);
             $actualValue = $attestationCertificateInfo['extensions'][$extension];
@@ -289,12 +286,12 @@ class VerifyAttestationWithOpenSsl
         }
     }
 
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, Attestation $attestation): void
+    /** @param non-empty-string $expectedSubjectName */
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Attestation $attestation): void
     {
         /** @var mixed $decodedPayload */
         $decodedPayload = json_decode($attestation->dsseEnvelopePayload, true);
 
-        // @todo names etc to not be hardcoded
         if (
             ! is_array($decodedPayload)
             || ! array_key_exists('subject', $decodedPayload)
@@ -303,7 +300,7 @@ class VerifyAttestationWithOpenSsl
             || ! array_key_exists(0, $decodedPayload['subject'])
             || ! is_array($decodedPayload['subject'][0])
             || ! array_key_exists('name', $decodedPayload['subject'][0])
-            || $decodedPayload['subject'][0]['name'] !== 'pie.phar'
+            || $decodedPayload['subject'][0]['name'] !== $expectedSubjectName
             || ! array_key_exists('digest', $decodedPayload['subject'][0])
             || ! is_array($decodedPayload['subject'][0]['digest'])
             || ! array_key_exists('sha256', $decodedPayload['subject'][0]['digest'])
@@ -320,11 +317,19 @@ class VerifyAttestationWithOpenSsl
         }
     }
 
-    /** @return non-empty-list<Attestation> */
-    private function downloadAttestations(FilenameWithChecksum $file): array
+    /**
+     * @param non-empty-string $owner
+     *
+     * @return non-empty-list<Attestation>
+     */
+    private function downloadAttestations(FilenameWithChecksum $file, string $owner): array
     {
-        // @todo change org
-        $attestationUrl = $this->githubApiBaseUrl . '/orgs/php/attestations/sha256:' . $file->checksum();
+        $attestationUrl = sprintf(
+            '%s/orgs/%s/attestations/sha256:%s',
+            $this->githubApiBaseUrl,
+            $owner,
+            $file->checksum(),
+        );
 
         try {
             $decodedJson = $this->httpDownloader->get(
