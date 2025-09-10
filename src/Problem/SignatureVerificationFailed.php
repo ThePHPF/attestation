@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-use RuntimeException;
-
 use function sprintf;
 
-class SignatureVerificationFailed extends RuntimeException implements FailedToVerifyArtifact
+class SignatureVerificationFailed extends FailedToVerifyArtifact
 {
     public static function forIndex(int $attestationIndex): self
     {

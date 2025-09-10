@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-use RuntimeException;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 
 use function sprintf;
 
-class MissingAttestation extends RuntimeException implements FailedToVerifyArtifact
+class MissingAttestation extends FailedToVerifyArtifact
 {
     public static function from(FilenameWithChecksum $filenameWithChecksum): self
     {

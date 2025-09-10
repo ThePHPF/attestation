@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-use RuntimeException;
-
 use function sprintf;
 use function strlen;
 
-class InvalidDerEncodedStringLength extends RuntimeException implements FailedToVerifyArtifact
+class InvalidDerEncodedStringLength extends FailedToVerifyArtifact
 {
     public static function fromDerString(string $derEncodedString, int $expectedLength): self
     {

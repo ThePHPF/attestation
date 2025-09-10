@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-use RuntimeException;
-
-class NoOpenSsl extends RuntimeException implements FailedToVerifyArtifact
+class NoOpenSsl extends FailedToVerifyArtifact
 {
     public static function new(): self
     {

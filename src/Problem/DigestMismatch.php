@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-use RuntimeException;
-
 use function sprintf;
 use function substr;
 
-class DigestMismatch extends RuntimeException implements FailedToVerifyArtifact
+class DigestMismatch extends FailedToVerifyArtifact
 {
     public static function fromChecksumMismatch(string $expected, string $actual): self
     {

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Problem;
 
-abstract class FailedToVerifyArtifact extends AttestationException
+use RuntimeException;
+
+abstract class AttestationException extends RuntimeException
 {
 }
