@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\Attestation\Problem;
+namespace ThePhpFoundation\Attestation;
 
 use RuntimeException;
 
