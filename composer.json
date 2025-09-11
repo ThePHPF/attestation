@@ -5,7 +5,6 @@
     "require": {
         "php": "^7.4||^8.0",
         "ext-json": "*",
-        "ext-openssl": "*",
         "composer/composer": "^2.2",
         "webmozart/assert": "^1.11"
     },
@@ -13,6 +12,9 @@
         "doctrine/coding-standard": "^13.0",
         "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^9.6.25"
+    },
+    "suggest": {
+        "ext-openssl": "Needed to verify certificates using OpenSSL"
     },
     "license": "BSD-3-Clause",
     "autoload": {
