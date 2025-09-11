@@ -2,9 +2,10 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\Attestation;
+namespace ThePhpFoundation\Attestation\Verification;
 
-use ThePhpFoundation\Attestation\Problem\FailedToVerifyArtifact;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 
 interface VerifyAttestation
 {

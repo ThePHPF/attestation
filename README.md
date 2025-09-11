@@ -16,8 +16,8 @@ carries out are:
 
 use ThePhpFoundation\Attestation\Extension;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\VerifyAttestationWithOpenSsl;
-use ThePhpFoundation\Attestation\Problem\FailedToVerifyArtifact;
+use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
+use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
 
 try {
     VerifyAttestationWithOpenSsl::factory()

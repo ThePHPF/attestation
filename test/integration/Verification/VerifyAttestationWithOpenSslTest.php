@@ -2,23 +2,23 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\IntegrationTest\Attestation;
+namespace ThePhpFoundation\IntegrationTest\Attestation\Verification;
 
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Extension;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\Problem\DigestMismatch;
-use ThePhpFoundation\Attestation\Problem\IssuerCertificateVerificationFailed;
-use ThePhpFoundation\Attestation\Problem\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Problem\MissingAttestation;
-use ThePhpFoundation\Attestation\Problem\NoIssuerCertificateInTrustedRoot;
-use ThePhpFoundation\Attestation\Problem\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\VerifyAttestationWithOpenSsl;
+use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
+use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
+use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
+use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
 
 class VerifyAttestationWithOpenSslTest extends TestCase
 {
-    private const GENUINE_PIE_PHAR                         = __DIR__ . '/../fixture/genuine-pie.phar';
-    private const PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER = __DIR__ . '/../fixture/pie-with-attestation-for-different-owner.phar';
+    private const GENUINE_PIE_PHAR                         = __DIR__ . '/../../fixture/genuine-pie.phar';
+    private const PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER = __DIR__ . '/../../fixture/pie-with-attestation-for-different-owner.phar';
 
     private VerifyAttestationWithOpenSsl $verifier;
 

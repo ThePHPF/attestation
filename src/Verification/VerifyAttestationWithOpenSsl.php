@@ -2,22 +2,24 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\Attestation;
+namespace ThePhpFoundation\Attestation\Verification;
 
 use Composer\Downloader\TransportException;
 use Composer\Factory;
 use Composer\IO\NullIO;
 use Composer\Util\AuthHelper;
 use Composer\Util\HttpDownloader;
-use ThePhpFoundation\Attestation\Problem\DigestMismatch;
-use ThePhpFoundation\Attestation\Problem\InvalidDerEncodedStringLength;
-use ThePhpFoundation\Attestation\Problem\InvalidSubjectDefinition;
-use ThePhpFoundation\Attestation\Problem\IssuerCertificateVerificationFailed;
-use ThePhpFoundation\Attestation\Problem\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Problem\MissingAttestation;
-use ThePhpFoundation\Attestation\Problem\NoIssuerCertificateInTrustedRoot;
-use ThePhpFoundation\Attestation\Problem\NoOpenSsl;
-use ThePhpFoundation\Attestation\Problem\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Attestation;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
+use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
+use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
+use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
+use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
+use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -45,7 +47,7 @@ use const OPENSSL_ALGO_SHA256;
 
 class VerifyAttestationWithOpenSsl implements VerifyAttestation
 {
-    public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../resources/trusted-root.jsonl';
+    public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
     private const GITHUB_API_URL = 'https://api.github.com';
 
