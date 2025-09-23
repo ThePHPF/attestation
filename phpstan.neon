@@ -2,4 +2,5 @@ parameters:
     level: 10
     paths:
         - src
+        - test/unit
         - test/integration

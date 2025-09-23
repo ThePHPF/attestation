@@ -36,6 +36,15 @@ final class FilenameWithChecksum
         return new self($filename, $hash);
     }
 
+    /**
+     * @param non-empty-string $filename
+     * @param non-empty-string $checksum
+     */
+    public static function fromFilenameAndChecksum(string $filename, string $checksum): self
+    {
+        return new self($filename, $checksum);
+    }
+
     /** @return non-empty-string */
     public function checksum(): string
     {
