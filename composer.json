@@ -5,23 +5,27 @@
     "require": {
         "php": "^7.4||^8.0",
         "ext-json": "*",
-        "ext-openssl": "*",
         "composer/composer": "^2.2",
         "webmozart/assert": "^1.11"
     },
     "require-dev": {
+        "doctrine/coding-standard": "^13.0",
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^9.6.25"
+    },
+    "suggest": {
+        "ext-openssl": "Needed to verify certificates using OpenSSL"
     },
     "license": "BSD-3-Clause",
     "autoload": {
         "psr-4": {
-            "ThePHPFoundation\\Attestation\\": "src/"
+            "ThePhpFoundation\\Attestation\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "ThePHPFoundation\\UnitTest\\Attestation\\": "test/unit",
-            "ThePHPFoundation\\IntegrationTest\\Attestation\\": "test/integration"
+            "ThePhpFoundation\\UnitTest\\Attestation\\": "test/unit",
+            "ThePhpFoundation\\IntegrationTest\\Attestation\\": "test/integration"
         }
     },
     "authors": [
@@ -35,6 +39,9 @@
         "preferred-install": "dist",
         "platform": {
             "php": "7.4.0"
+        },
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
         }
     }
 }

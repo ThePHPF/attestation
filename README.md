@@ -1,3 +1,37 @@
 # Attestation
 
-A PHP library to aid in verifying artifact attestations
+A PHP library to aid in verifying artifact attestations. This tool will carry
+out some basic verifications that the given file is genuine. The checks it
+carries out are:
+
+ * Verifies the attestation certificate was signed by a trusted root
+ * Verifies the given OID extensions match what you expect
+ * Checks the digest in the attestation record matches the actual file given
+ * Verifies the DSSE envelope signature
+
+## Example usage
+
+```php
+<?php
+
+use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
+use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
+
+try {
+    VerifyAttestationWithOpenSsl::factory()
+        ->verify(
+            FilenameWithChecksum::fromFilename($fileYouWantToVerify),
+            'your-org', // the org/user in your GH URL, e.g. https://github.com/your-org
+            'the-filename', // the filename of the subject when it was built
+            [
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
+            ],
+        );
+} catch (FailedToVerifyArtifact $issue) {
+    // Handle verification failure in the way you see fit...
+}
+```
