@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace ThePhpFoundation\IntegrationTest\Attestation\Verification;
 
 use PHPUnit\Framework\TestCase;
-use ThePhpFoundation\Attestation\Extension;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -35,9 +35,9 @@ class VerifyAttestationWithOpenSslTest extends TestCase
             'php',
             'pie.phar',
             [
-                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
             ],
         );
     }
@@ -50,9 +50,9 @@ class VerifyAttestationWithOpenSslTest extends TestCase
             'php',
             'pie.phar',
             [
-                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
             ],
         );
     }
@@ -65,9 +65,9 @@ class VerifyAttestationWithOpenSslTest extends TestCase
             'asgrim',
             'pie.phar',
             [
-                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
             ],
         );
     }

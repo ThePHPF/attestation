@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace ThePhpFoundation\Attestation;
 
 /**
- * @link https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md#136141572641--fulcio
+ * Some of the Fulcio Sigstore OID extensions.
  *
- * @todo change to an enum in PHP 8.1
+ * @link https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md#136141572641--fulcio
  */
-final class Extension
+final class FulcioSigstoreOidExtensions
 {
     /** @link https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md#1361415726418--issuer-v2 */
     public const ISSUER_V2 = '1.3.6.1.4.1.57264.1.8';

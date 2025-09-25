@@ -223,7 +223,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
     }
 
-    /** @param array<Extension::*, string> $extensions */
+    /** @param array<non-empty-string, string> $extensions */
     private function assertCertificateExtensionClaims(Attestation $attestation, array $extensions): void
     {
         $attestationCertificateInfo = openssl_x509_parse($attestation->certificate);

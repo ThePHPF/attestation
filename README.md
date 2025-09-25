@@ -14,7 +14,7 @@ carries out are:
 ```php
 <?php
 
-use ThePhpFoundation\Attestation\Extension;
+use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
@@ -26,9 +26,9 @@ try {
             'your-org', // the org/user in your GH URL, e.g. https://github.com/your-org
             'the-filename', // the filename of the subject when it was built
             [
-                Extension::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                Extension::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
-                Extension::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
             ],
         );
 } catch (FailedToVerifyArtifact $issue) {
