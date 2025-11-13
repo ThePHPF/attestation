@@ -23,6 +23,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFai
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
+use function array_key_first;
 use function array_map;
 use function count;
 use function explode;
@@ -32,11 +33,13 @@ use function hash_equals;
 use function is_array;
 use function is_string;
 use function json_decode;
+use function method_exists;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
+use function parse_url;
 use function sprintf;
 use function strlen;
 use function substr;
@@ -319,6 +322,41 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         }
     }
 
+    /** @return non-empty-string|null */
+    private function authHeader(string $attestationUrl): ?string
+    {
+        $urlParts = parse_url($this->githubApiBaseUrl);
+        Assert::isArray($urlParts);
+        Assert::keyExists($urlParts, 'host');
+        Assert::stringNotEmpty($urlParts['host']);
+
+        // @phpstan-ignore-next-line - provided for compatibility before/after Composer 2.9
+        if (! method_exists($this->authHelper, 'addAuthenticationOptions')) {
+            $authHeaders = $this->authHelper->addAuthenticationHeader([], $urlParts['host'], $attestationUrl);
+        } else {
+            /**
+             * Composer 2.9 introduced the {@see AuthHelper::addAuthenticationOptions} method
+             *
+             * @link https://github.com/composer/composer/pull/12406
+             */
+            $authOptions = $this->authHelper->addAuthenticationOptions([], $urlParts['host'], $attestationUrl);
+
+            Assert::keyExists($authOptions, 'http');
+            Assert::isArray($authOptions['http']);
+            Assert::keyExists($authOptions['http'], 'header');
+
+            $authHeaders = $authOptions['http']['header'];
+        }
+
+        if (! is_array($authHeaders) || count($authHeaders) !== 1) {
+            return null;
+        }
+
+        $authHeader = $authHeaders[array_key_first($authHeaders)];
+
+        return is_string($authHeader) && $authHeader !== '' ? $authHeader : null;
+    }
+
     /**
      * @param non-empty-string $owner
      *
@@ -340,7 +378,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                     'retry-auth-failure' => true,
                     'http' => [
                         'method' => 'GET',
-                        'header' => $this->authHelper->addAuthenticationHeader([], $this->githubApiBaseUrl, $attestationUrl),
+                        'header' => [$this->authHeader($attestationUrl)],
                     ],
                 ],
             )->decodeJson();
