@@ -7,7 +7,6 @@ namespace ThePhpFoundation\Attestation\Verification;
 use Composer\Downloader\TransportException;
 use Composer\Factory;
 use Composer\IO\NullIO;
-use Composer\Util\AuthHelper;
 use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Attestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
@@ -56,7 +55,6 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     /** @var non-empty-string */
     private string $githubApiBaseUrl;
     private HttpDownloader $httpDownloader;
-    private AuthHelper $authHelper;
 
     /**
      * @param non-empty-string $trustedRootFilePath
@@ -65,10 +63,8 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     public function __construct(
         string $trustedRootFilePath,
         string $githubApiBaseUrl,
-        HttpDownloader $httpDownloader,
-        AuthHelper $authHelper
+        HttpDownloader $httpDownloader
     ) {
-        $this->authHelper          = $authHelper;
         $this->httpDownloader      = $httpDownloader;
         $this->githubApiBaseUrl    = $githubApiBaseUrl;
         $this->trustedRootFilePath = $trustedRootFilePath;
@@ -85,7 +81,6 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
             self::TRUSTED_ROOT_FILE_PATH,
             self::GITHUB_API_URL,
             $http,
-            new AuthHelper($io, $config),
         );
     }
 
@@ -340,7 +335,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                     'retry-auth-failure' => true,
                     'http' => [
                         'method' => 'GET',
-                        'header' => $this->authHelper->addAuthenticationHeader([], $this->githubApiBaseUrl, $attestationUrl),
+                        'header' => [],
                     ],
                 ],
             )->decodeJson();

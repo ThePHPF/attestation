@@ -11,6 +11,7 @@
     "require-dev": {
         "doctrine/coding-standard": "^13.0 || ^14.0",
         "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-webmozart-assert": "^2.0",
         "phpunit/phpunit": "^9.6.25"
     },
     "suggest": {
