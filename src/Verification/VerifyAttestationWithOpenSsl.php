@@ -322,7 +322,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     private function downloadAttestations(FilenameWithChecksum $file, string $owner): array
     {
         $attestationUrl = sprintf(
-            '%s/orgs/%s/attestations/sha256:%s',
+            '%s/orgs/%s/attestations/sha256:%s?predicate_type=provenance',
             $this->githubApiBaseUrl,
             $owner,
             $file->checksum(),
