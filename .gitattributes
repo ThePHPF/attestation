@@ -1,0 +1,11 @@
+*.php text eol=lf
+*.phpt text eol=lf
+/.editorconfig export-ignore
+/.gitattributes export-ignore
+/.github/ export-ignore
+/.gitignore export-ignore
+/composer.lock export-ignore
+/phpcs.xml.dist export-ignore
+/phpstan.neon export-ignore
+/phpunit.xml.dist export-ignore
+/test/ export-ignore
