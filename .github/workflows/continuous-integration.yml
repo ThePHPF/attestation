@@ -12,6 +12,10 @@ jobs:
     runs-on: ${{ matrix.operating-system }}
     strategy:
       matrix:
+        composer-dependencies:
+          - highest
+          - lowest
+          - locked
         operating-system:
           - ubuntu-latest
           - windows-latest
@@ -33,6 +37,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v7
       - uses: ramsey/composer-install@v4
+        with:
+          dependency-versions: ${{ matrix.composer-dependencies }}
       - name: GH token
         run: composer config --global --auth github-oauth.github.com ${{ secrets.GITHUB_TOKEN }}
       - name: Run PHPUnit
