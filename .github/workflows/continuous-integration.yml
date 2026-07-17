@@ -31,8 +31,8 @@ jobs:
           extensions: intl, sodium, zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v5
-      - uses: ramsey/composer-install@v3
+      - uses: actions/checkout@v7
+      - uses: ramsey/composer-install@v4
       - name: GH token
         run: composer config --global --auth github-oauth.github.com ${{ secrets.GITHUB_TOKEN }}
       - name: Run PHPUnit
@@ -50,8 +50,8 @@ jobs:
           extensions: intl, sodium, zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v5
-      - uses: ramsey/composer-install@v3
+      - uses: actions/checkout@v7
+      - uses: ramsey/composer-install@v4
       - name: Run PHPCS
         run: vendor/bin/phpcs
 
@@ -65,8 +65,8 @@ jobs:
           extensions: intl, sodium, zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/checkout@v5
-      - uses: ramsey/composer-install@v3
+      - uses: actions/checkout@v7
+      - uses: ramsey/composer-install@v4
       - name: Validate the composer configuration
         run: composer validate --strict
       - name: Run PHPStan
