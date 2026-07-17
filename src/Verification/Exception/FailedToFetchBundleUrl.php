@@ -1,0 +1,19 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ThePhpFoundation\Attestation\Verification\Exception;
+
+use function sprintf;
+
+class FailedToFetchBundleUrl extends FailedToVerifyArtifact
+{
+    public static function fromUrl(string $bundleUrl, ?int $statusCode = null): self
+    {
+        return new self(sprintf(
+            'Failed to fetch attestation bundle from "%s" (HTTP status: %s)',
+            $bundleUrl,
+            $statusCode !== null ? (string) $statusCode : 'unknown',
+        ));
+    }
+}
