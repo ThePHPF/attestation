@@ -10,7 +10,6 @@ use Composer\IO\NullIO;
 use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Attestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\FlowSnappy\Snappy;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
@@ -38,6 +37,7 @@ use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
+use function snappy_uncompress;
 use function sprintf;
 use function strlen;
 use function substr;
@@ -411,7 +411,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
             throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $response->getStatusCode());
         }
 
-        $decompressedBundle = (new Snappy())->uncompress($compressedBundle);
+        $decompressedBundle = snappy_uncompress($compressedBundle);
 
         /** @var mixed $decodedBundle */
         $decodedBundle = json_decode($decompressedBundle, true);
