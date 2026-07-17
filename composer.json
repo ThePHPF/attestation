@@ -15,13 +15,17 @@
         "phpunit/phpunit": "^9.6.25"
     },
     "suggest": {
-        "ext-openssl": "Needed to verify certificates using OpenSSL"
+        "ext-openssl": "Needed to verify certificates using OpenSSL",
+        "ext-snappy": "Decompress bundle attestations faster; if not, flow-php/snappy PHP fallback is used"
     },
     "license": "BSD-3-Clause",
     "autoload": {
         "psr-4": {
             "ThePhpFoundation\\Attestation\\": "src/"
-        }
+        },
+        "files": [
+            "src/FlowSnappy/polyfill.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {

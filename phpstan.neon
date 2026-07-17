@@ -7,3 +7,6 @@ parameters:
         - src
         - test/unit
         - test/integration
+    # Exclude vendored flow-php/snappy files
+    excludePaths:
+        - src/FlowSnappy/*

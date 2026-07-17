@@ -11,6 +11,7 @@ use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Attestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
@@ -36,6 +37,7 @@ use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
+use function snappy_uncompress;
 use function sprintf;
 use function strlen;
 use function substr;
@@ -342,14 +344,20 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 
             Assert::isArray($decodedJson);
             Assert::keyExists($decodedJson, 'attestations');
-            Assert::isNonEmptyList($decodedJson['attestations']);
+            Assert::isList($decodedJson['attestations']);
+
+            if ($decodedJson['attestations'] === []) {
+                throw MissingAttestation::from($file);
+            }
 
             return array_map(
                 /** @param mixed $attestation */
-                static function ($attestation): Attestation {
+                function ($attestation): Attestation {
                     Assert::isArray($attestation);
 
-                    return Attestation::fromAttestationBundleWithDsseEnvelope($attestation);
+                    return Attestation::fromAttestationBundleWithDsseEnvelope(
+                        $this->pullBundleFromUrlOrInline($attestation),
+                    );
                 },
                 $decodedJson['attestations'],
             );
@@ -360,5 +368,55 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 
             throw $transportException;
         }
+    }
+
+    /**
+     * GitHub may return `bundle` inline (old behaviour), or may give us a
+     * `bundle_url`. The `bundle_url` is a short-lived token URL to grab the
+     * bundle from; however the bundle is compressed using Snappy (a Google
+     * compression algo), but we can use `flow-php/snappy` to decompress and
+     * return the final bundle.
+     *
+     * @param array<array-key, mixed> $attestation
+     *
+     * @return array<array-key, mixed>
+     */
+    private function pullBundleFromUrlOrInline(array $attestation): array
+    {
+        if (array_key_exists('bundle', $attestation) && is_array($attestation['bundle'])) {
+            return $attestation['bundle'];
+        }
+
+        Assert::keyExists($attestation, 'bundle_url');
+        Assert::stringNotEmpty($attestation['bundle_url']);
+        $bundleUrl = $attestation['bundle_url'];
+
+        try {
+            $response = $this->httpDownloader->get(
+                $bundleUrl,
+                [
+                    'retry-auth-failure' => false,
+                    'http' => [
+                        'method' => 'GET',
+                        'header' => [],
+                    ],
+                ],
+            );
+        } catch (TransportException $transportException) {
+            throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $transportException->getStatusCode());
+        }
+
+        $compressedBundle = $response->getBody();
+        if ($compressedBundle === null || $compressedBundle === '') {
+            throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $response->getStatusCode());
+        }
+
+        $decompressedBundle = snappy_uncompress($compressedBundle);
+
+        /** @var mixed $decodedBundle */
+        $decodedBundle = json_decode($decompressedBundle, true);
+        Assert::isArray($decodedBundle);
+
+        return $decodedBundle;
     }
 }

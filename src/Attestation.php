@@ -39,47 +39,44 @@ final class Attestation
         $this->certificate             = $certificate;
     }
 
-    /** @param array<array-key, mixed> $attestation */
-    public static function fromAttestationBundleWithDsseEnvelope(array $attestation): self
+    /** @param array<array-key, mixed> $bundle */
+    public static function fromAttestationBundleWithDsseEnvelope(array $bundle): self
     {
-        Assert::keyExists($attestation, 'bundle');
-        Assert::isArray($attestation['bundle']);
+        Assert::keyExists($bundle, 'verificationMaterial');
+        Assert::isArray($bundle['verificationMaterial']);
+        Assert::keyExists($bundle['verificationMaterial'], 'certificate');
+        Assert::isArray($bundle['verificationMaterial']['certificate']);
+        Assert::keyExists($bundle['verificationMaterial']['certificate'], 'rawBytes');
+        Assert::stringNotEmpty($bundle['verificationMaterial']['certificate']['rawBytes']);
 
-        Assert::keyExists($attestation['bundle'], 'verificationMaterial');
-        Assert::isArray($attestation['bundle']['verificationMaterial']);
-        Assert::keyExists($attestation['bundle']['verificationMaterial'], 'certificate');
-        Assert::isArray($attestation['bundle']['verificationMaterial']['certificate']);
-        Assert::keyExists($attestation['bundle']['verificationMaterial']['certificate'], 'rawBytes');
-        Assert::stringNotEmpty($attestation['bundle']['verificationMaterial']['certificate']['rawBytes']);
-
-        Assert::keyExists($attestation['bundle'], 'dsseEnvelope');
-        Assert::isArray($attestation['bundle']['dsseEnvelope']);
-        Assert::keyExists($attestation['bundle']['dsseEnvelope'], 'payload');
-        Assert::stringNotEmpty($attestation['bundle']['dsseEnvelope']['payload']);
-        Assert::keyExists($attestation['bundle']['dsseEnvelope'], 'payloadType');
-        Assert::stringNotEmpty($attestation['bundle']['dsseEnvelope']['payloadType']);
-        Assert::keyExists($attestation['bundle']['dsseEnvelope'], 'signatures');
-        Assert::isNonEmptyList($attestation['bundle']['dsseEnvelope']['signatures']);
-        Assert::count($attestation['bundle']['dsseEnvelope']['signatures'], 1);
-        Assert::keyExists($attestation['bundle']['dsseEnvelope']['signatures'], 0);
-        Assert::isArray($attestation['bundle']['dsseEnvelope']['signatures'][0]);
-        Assert::keyExists($attestation['bundle']['dsseEnvelope']['signatures'][0], 'sig');
-        Assert::stringNotEmpty($attestation['bundle']['dsseEnvelope']['signatures'][0]['sig']);
+        Assert::keyExists($bundle, 'dsseEnvelope');
+        Assert::isArray($bundle['dsseEnvelope']);
+        Assert::keyExists($bundle['dsseEnvelope'], 'payload');
+        Assert::stringNotEmpty($bundle['dsseEnvelope']['payload']);
+        Assert::keyExists($bundle['dsseEnvelope'], 'payloadType');
+        Assert::stringNotEmpty($bundle['dsseEnvelope']['payloadType']);
+        Assert::keyExists($bundle['dsseEnvelope'], 'signatures');
+        Assert::isNonEmptyList($bundle['dsseEnvelope']['signatures']);
+        Assert::count($bundle['dsseEnvelope']['signatures'], 1);
+        Assert::keyExists($bundle['dsseEnvelope']['signatures'], 0);
+        Assert::isArray($bundle['dsseEnvelope']['signatures'][0]);
+        Assert::keyExists($bundle['dsseEnvelope']['signatures'][0], 'sig');
+        Assert::stringNotEmpty($bundle['dsseEnvelope']['signatures'][0]['sig']);
 
         $decoratedCertificate = "-----BEGIN CERTIFICATE-----\n"
-            . wordwrap($attestation['bundle']['verificationMaterial']['certificate']['rawBytes'], 67, "\n", true) . "\n"
+            . wordwrap($bundle['verificationMaterial']['certificate']['rawBytes'], 67, "\n", true) . "\n"
             . "-----END CERTIFICATE-----\n";
 
-        $decodedPayload = base64_decode($attestation['bundle']['dsseEnvelope']['payload']);
+        $decodedPayload = base64_decode($bundle['dsseEnvelope']['payload']);
         Assert::stringNotEmpty($decodedPayload);
 
-        $decodedSignature = base64_decode($attestation['bundle']['dsseEnvelope']['signatures'][0]['sig']);
+        $decodedSignature = base64_decode($bundle['dsseEnvelope']['signatures'][0]['sig']);
         Assert::stringNotEmpty($decodedSignature);
 
         return new self(
             $decoratedCertificate,
             $decodedPayload,
-            $attestation['bundle']['dsseEnvelope']['payloadType'],
+            $bundle['dsseEnvelope']['payloadType'],
             $decodedSignature,
         );
     }
