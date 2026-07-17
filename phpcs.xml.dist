@@ -10,6 +10,9 @@
     <file>test/unit</file>
     <file>test/integration</file>
 
+    <!-- Exclude vendored flow-php/snappy files -->
+    <exclude-pattern>*/src/FlowSnappy/*</exclude-pattern>
+
     <rule ref="Doctrine">
         <exclude name="Generic.Files.LineLength.TooLong"/>
     </rule>
