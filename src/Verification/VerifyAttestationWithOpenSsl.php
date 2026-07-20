@@ -52,6 +52,16 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 
     private const GITHUB_API_URL = 'https://api.github.com';
 
+    /**
+     * Pinning to specific GH API version so we can control BC surface
+     * https://docs.github.com/en/rest/about-the-rest-api/api-versions
+     *
+     * @link https://github.com/ThePHPF/attestation/issues/31
+     *
+     * @todo update to 2026-03-10
+     */
+    private const GITHUB_API_VERSION = '2022-11-28';
+
     /** @var non-empty-string */
     private string $trustedRootFilePath;
     /** @var non-empty-string */
@@ -337,7 +347,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                     'retry-auth-failure' => true,
                     'http' => [
                         'method' => 'GET',
-                        'header' => [],
+                        'header' => ['X-GitHub-Api-Version: ' . self::GITHUB_API_VERSION],
                     ],
                 ],
             )->decodeJson();
