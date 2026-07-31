@@ -282,15 +282,14 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         $publicKey = openssl_pkey_get_public($attestation->certificate);
         Assert::notFalse($publicKey);
 
-        $preAuthenticationEncoding = sprintf(
-            'DSSEv1 %d %s %d %s',
-            strlen($attestation->dsseEnvelopePayloadType),
-            $attestation->dsseEnvelopePayloadType,
-            strlen($attestation->dsseEnvelopePayload),
-            $attestation->dsseEnvelopePayload,
-        );
-
-        if (openssl_verify($preAuthenticationEncoding, $attestation->dsseEnvelopeSignature, $publicKey, OPENSSL_ALGO_SHA256) !== 1) {
+        if (
+            openssl_verify(
+                $attestation->dsseEnvelope->preAuthenticationEncoding(),
+                $attestation->dsseEnvelope->signature,
+                $publicKey,
+                OPENSSL_ALGO_SHA256,
+            ) !== 1
+        ) {
             throw SignatureVerificationFailed::forIndex($attestationIndex);
         }
     }
@@ -299,7 +298,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Attestation $attestation): void
     {
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($attestation->dsseEnvelopePayload, true);
+        $decodedPayload = json_decode($attestation->dsseEnvelope->payload, true);
 
         if (
             ! is_array($decodedPayload)
