@@ -10,6 +10,7 @@ use Composer\IO\NullIO;
 use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Attestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
@@ -42,7 +43,6 @@ use function sprintf;
 use function strlen;
 use function substr;
 use function trim;
-use function wordwrap;
 
 use const OPENSSL_ALGO_SHA256;
 
@@ -129,7 +129,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 
     private function assertCertificateSignedByTrustedRoot(Attestation $attestation): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate);
+        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'issuer');
         if (is_array($attestationCertificateInfo['issuer'])) {
@@ -190,15 +190,9 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                         continue;
                     }
 
-                    // Embed the base64-encoded DER into a PEM envelope for consumption by OpenSSL.
-                    $caCertificateString = sprintf(
-                        <<<'EOT'
-                        -----BEGIN CERTIFICATE-----
-                        %s
-                        -----END CERTIFICATE-----
-                        EOT,
-                        wordwrap($caCertificateWrapper['rawBytes'], 67, "\n", true),
-                    );
+                    $caCertificateString = PemCertificate::fromBase64EncodedDerBytes(
+                        $caCertificateWrapper['rawBytes'],
+                    )->decoratedCertificate();
 
                     $caCertificateInfo = openssl_x509_parse($caCertificateString);
                     Assert::isArray($caCertificateInfo);
@@ -211,7 +205,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                     }
 
                     // Finally, verify that the located CA cert was used to sign the attestation certificate
-                    if (openssl_x509_verify($attestation->certificate, $caCertificateString) !== 1) {
+                    if (openssl_x509_verify($attestation->certificate->decoratedCertificate(), $caCertificateString) !== 1) {
                         /** @psalm-suppress MixedArgument */
                         throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
                     }
@@ -233,7 +227,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     /** @param array<non-empty-string, string> $extensions */
     private function assertCertificateExtensionClaims(Attestation $attestation, array $extensions): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate);
+        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'extensions');
         Assert::isArray($attestationCertificateInfo['extensions']);
@@ -279,18 +273,17 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
             throw NoOpenssl::new();
         }
 
-        $publicKey = openssl_pkey_get_public($attestation->certificate);
+        $publicKey = openssl_pkey_get_public($attestation->certificate->decoratedCertificate());
         Assert::notFalse($publicKey);
 
-        $preAuthenticationEncoding = sprintf(
-            'DSSEv1 %d %s %d %s',
-            strlen($attestation->dsseEnvelopePayloadType),
-            $attestation->dsseEnvelopePayloadType,
-            strlen($attestation->dsseEnvelopePayload),
-            $attestation->dsseEnvelopePayload,
-        );
-
-        if (openssl_verify($preAuthenticationEncoding, $attestation->dsseEnvelopeSignature, $publicKey, OPENSSL_ALGO_SHA256) !== 1) {
+        if (
+            openssl_verify(
+                $attestation->dsseEnvelope->preAuthenticationEncoding(),
+                $attestation->dsseEnvelope->signature,
+                $publicKey,
+                OPENSSL_ALGO_SHA256,
+            ) !== 1
+        ) {
             throw SignatureVerificationFailed::forIndex($attestationIndex);
         }
     }
@@ -299,7 +292,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Attestation $attestation): void
     {
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($attestation->dsseEnvelopePayload, true);
+        $decodedPayload = json_decode($attestation->dsseEnvelope->payload, true);
 
         if (
             ! is_array($decodedPayload)
