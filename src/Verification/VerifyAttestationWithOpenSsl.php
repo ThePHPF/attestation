@@ -4,27 +4,20 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Verification;
 
-use Composer\Downloader\TransportException;
-use Composer\Factory;
-use Composer\IO\NullIO;
-use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
-use function array_map;
 use function count;
 use function explode;
 use function extension_loaded;
@@ -38,8 +31,6 @@ use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
-use function snappy_uncompress;
-use function sprintf;
 use function strlen;
 use function substr;
 use function trim;
@@ -50,62 +41,28 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    private const GITHUB_API_URL = 'https://api.github.com';
-
-    /**
-     * Pinning to specific GH API version so we can control BC surface
-     * https://docs.github.com/en/rest/about-the-rest-api/api-versions
-     *
-     * @link https://github.com/ThePHPF/attestation/issues/31
-     *
-     * @todo update to 2026-03-10
-     */
-    private const GITHUB_API_VERSION = '2022-11-28';
-
     /** @var non-empty-string */
     private string $trustedRootFilePath;
-    /** @var non-empty-string */
-    private string $githubApiBaseUrl;
-    private HttpDownloader $httpDownloader;
 
-    /**
-     * @param non-empty-string $trustedRootFilePath
-     * @param non-empty-string $githubApiBaseUrl
-     */
-    public function __construct(
-        string $trustedRootFilePath,
-        string $githubApiBaseUrl,
-        HttpDownloader $httpDownloader
-    ) {
-        $this->httpDownloader      = $httpDownloader;
-        $this->githubApiBaseUrl    = $githubApiBaseUrl;
+    /** @param non-empty-string $trustedRootFilePath */
+    public function __construct(string $trustedRootFilePath)
+    {
         $this->trustedRootFilePath = $trustedRootFilePath;
     }
 
     public static function factory(): self
     {
-        $io     = new NullIO();
-        $config = Factory::createConfig();
-        $io->loadConfiguration($config);
-        $http = Factory::createHttpDownloader($io, $config);
-
-        return new self(
-            self::TRUSTED_ROOT_FILE_PATH,
-            self::GITHUB_API_URL,
-            $http,
-        );
+        return new self(self::TRUSTED_ROOT_FILE_PATH);
     }
 
     /** @inheritDoc */
     public function verify(
+        array $bundles,
         FilenameWithChecksum $file,
-        string $owner,
         string $expectedSubjectName,
         array $extensionsToVerify
     ): void {
-        $attestations = $this->downloadAttestations($file, $owner);
-
-        foreach ($attestations as $attestationIndex => $attestation) {
+        foreach ($bundles as $bundleIndex => $bundle) {
             /**
              * Useful references. Whilst we don't do the full verification that
              * `gh attestation verify` would (since we don't want to re-invent
@@ -117,19 +74,19 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
              *  - https://docs.sigstore.dev/logging/verify-release/
              *  - https://github.com/secure-systems-lab/dsse/blob/master/protocol.md#protocol
              */
-            $this->assertCertificateSignedByTrustedRoot($attestation);
+            $this->assertCertificateSignedByTrustedRoot($bundle);
 
-            $this->assertCertificateExtensionClaims($attestation, $extensionsToVerify);
+            $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
 
-            $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $attestation);
+            $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle);
 
-            $this->verifyDsseEnvelopeSignature($attestationIndex, $attestation);
+            $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle);
         }
     }
 
-    private function assertCertificateSignedByTrustedRoot(Bundle $attestation): void
+    private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'issuer');
         if (is_array($attestationCertificateInfo['issuer'])) {
@@ -205,7 +162,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
                     }
 
                     // Finally, verify that the located CA cert was used to sign the attestation certificate
-                    if (openssl_x509_verify($attestation->certificate->decoratedCertificate(), $caCertificateString) !== 1) {
+                    if (openssl_x509_verify($bundle->certificate->decoratedCertificate(), $caCertificateString) !== 1) {
                         /** @psalm-suppress MixedArgument */
                         throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
                     }
@@ -225,9 +182,9 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     }
 
     /** @param array<non-empty-string, string> $extensions */
-    private function assertCertificateExtensionClaims(Bundle $attestation, array $extensions): void
+    private function assertCertificateExtensionClaims(Bundle $bundle, array $extensions): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'extensions');
         Assert::isArray($attestationCertificateInfo['extensions']);
@@ -267,32 +224,32 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         }
     }
 
-    private function verifyDsseEnvelopeSignature(int $attestationIndex, Bundle $attestation): void
+    private function verifyDsseEnvelopeSignature(int $bundleIndex, Bundle $bundle): void
     {
         if (! extension_loaded('openssl')) {
             throw NoOpenssl::new();
         }
 
-        $publicKey = openssl_pkey_get_public($attestation->certificate->decoratedCertificate());
+        $publicKey = openssl_pkey_get_public($bundle->certificate->decoratedCertificate());
         Assert::notFalse($publicKey);
 
         if (
             openssl_verify(
-                $attestation->dsseEnvelope->preAuthenticationEncoding(),
-                $attestation->dsseEnvelope->signature,
+                $bundle->dsseEnvelope->preAuthenticationEncoding(),
+                $bundle->dsseEnvelope->signature,
                 $publicKey,
                 OPENSSL_ALGO_SHA256,
             ) !== 1
         ) {
-            throw SignatureVerificationFailed::forIndex($attestationIndex);
+            throw SignatureVerificationFailed::forIndex($bundleIndex);
         }
     }
 
     /** @param non-empty-string $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $attestation): void
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $bundle): void
     {
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($attestation->dsseEnvelope->payload, true);
+        $decodedPayload = json_decode($bundle->dsseEnvelope->payload, true);
 
         if (
             ! is_array($decodedPayload)
@@ -317,109 +274,5 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         if (! hash_equals($expected, $actual)) {
             throw DigestMismatch::fromChecksumMismatch($expected, $actual);
         }
-    }
-
-    /**
-     * @param non-empty-string $owner
-     *
-     * @return non-empty-list<Bundle>
-     */
-    private function downloadAttestations(FilenameWithChecksum $file, string $owner): array
-    {
-        $attestationUrl = sprintf(
-            '%s/orgs/%s/attestations/sha256:%s?predicate_type=provenance',
-            $this->githubApiBaseUrl,
-            $owner,
-            $file->checksum(),
-        );
-
-        try {
-            $decodedJson = $this->httpDownloader->get(
-                $attestationUrl,
-                [
-                    'retry-auth-failure' => true,
-                    'http' => [
-                        'method' => 'GET',
-                        'header' => ['X-GitHub-Api-Version: ' . self::GITHUB_API_VERSION],
-                    ],
-                ],
-            )->decodeJson();
-
-            Assert::isArray($decodedJson);
-            Assert::keyExists($decodedJson, 'attestations');
-            Assert::isList($decodedJson['attestations']);
-
-            if ($decodedJson['attestations'] === []) {
-                throw MissingAttestation::from($file);
-            }
-
-            return array_map(
-                /** @param mixed $attestation */
-                function ($attestation): Bundle {
-                    Assert::isArray($attestation);
-
-                    return Bundle::fromBundleWithDsseEnvelope(
-                        $this->pullBundleFromUrlOrInline($attestation),
-                    );
-                },
-                $decodedJson['attestations'],
-            );
-        } catch (TransportException $transportException) {
-            if ($transportException->getStatusCode() === 404) {
-                throw MissingAttestation::from($file);
-            }
-
-            throw $transportException;
-        }
-    }
-
-    /**
-     * GitHub may return `bundle` inline (old behaviour), or may give us a
-     * `bundle_url`. The `bundle_url` is a short-lived token URL to grab the
-     * bundle from; however the bundle is compressed using Snappy (a Google
-     * compression algo), but we can use `flow-php/snappy` to decompress and
-     * return the final bundle.
-     *
-     * @param array<array-key, mixed> $attestation
-     *
-     * @return array<array-key, mixed>
-     */
-    private function pullBundleFromUrlOrInline(array $attestation): array
-    {
-        if (array_key_exists('bundle', $attestation) && is_array($attestation['bundle'])) {
-            return $attestation['bundle'];
-        }
-
-        Assert::keyExists($attestation, 'bundle_url');
-        Assert::stringNotEmpty($attestation['bundle_url']);
-        $bundleUrl = $attestation['bundle_url'];
-
-        try {
-            $response = $this->httpDownloader->get(
-                $bundleUrl,
-                [
-                    'retry-auth-failure' => false,
-                    'http' => [
-                        'method' => 'GET',
-                        'header' => [],
-                    ],
-                ],
-            );
-        } catch (TransportException $transportException) {
-            throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $transportException->getStatusCode());
-        }
-
-        $compressedBundle = $response->getBody();
-        if ($compressedBundle === null || $compressedBundle === '') {
-            throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $response->getStatusCode());
-        }
-
-        $decompressedBundle = snappy_uncompress($compressedBundle);
-
-        /** @var mixed $decodedBundle */
-        $decodedBundle = json_decode($decompressedBundle, true);
-        Assert::isArray($decodedBundle);
-
-        return $decodedBundle;
     }
 }
