@@ -7,8 +7,8 @@ namespace ThePhpFoundation\IntegrationTest\Attestation\BundleSource;
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
+use ThePhpFoundation\Attestation\BundleSource\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
 
 /** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle */
 class DownloadGitHubBundleTest extends TestCase

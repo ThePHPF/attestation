@@ -9,9 +9,9 @@ use Composer\Factory;
 use Composer\IO\NullIO;
 use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Bundle;
+use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToFetchBundleUrl;
+use ThePhpFoundation\Attestation\BundleSource\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\Verification\Exception\FailedToFetchBundleUrl;
-use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;

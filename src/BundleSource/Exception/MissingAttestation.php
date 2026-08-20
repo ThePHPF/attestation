@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\Attestation\Verification\Exception;
+namespace ThePhpFoundation\Attestation\BundleSource\Exception;
 
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 
 use function sprintf;
 
-class MissingAttestation extends FailedToVerifyArtifact
+class MissingAttestation extends BundleSourceException
 {
     public static function from(FilenameWithChecksum $filenameWithChecksum): self
     {
