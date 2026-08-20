@@ -10,7 +10,7 @@ include $_composer_autoload_path ?? __DIR__ . '/../vendor/autoload.php';
 
 $application = new Application('Attestation CLI');
 $application->addCommands([
-    new \ThePhpFoundation\Attestation\Command\Verify(),
+    new \ThePhpFoundation\Attestation\Command\VerifyBundle(),
 ]);
 
 $application->run();

@@ -22,8 +22,8 @@ use function json_decode;
 /** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
 class VerifyBundleWithOpenSslTest extends TestCase
 {
-    private const BUNDLE_FIXTURE   = __DIR__ . '/../../fixture/bundle.json';
-    private const GENUINE_PIE_PHAR = __DIR__ . '/../../fixture/genuine-pie.phar';
+    private const BUNDLE_FIXTURE = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR       = __DIR__ . '/../../fixture/pie.phar';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -49,7 +49,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectNotToPerformAssertions();
         $this->verifier->verify(
             $this->loadFixtureBundle(),
-            FilenameWithChecksum::fromFilename(self::GENUINE_PIE_PHAR),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
             'pie.phar',
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
@@ -64,7 +64,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(MismatchingExtensionValues::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(),
-            FilenameWithChecksum::fromFilename(self::GENUINE_PIE_PHAR),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
             'pie.phar',
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',

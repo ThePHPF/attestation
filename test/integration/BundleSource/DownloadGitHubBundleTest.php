@@ -13,12 +13,12 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 /** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle */
 class DownloadGitHubBundleTest extends TestCase
 {
-    private const GENUINE_PIE_PHAR = __DIR__ . '/../../fixture/genuine-pie.phar';
+    private const PIE_PHAR = __DIR__ . '/../../fixture/pie.phar';
 
     public function testDownloadsBundlesForAKnownAttestedArtifact(): void
     {
         $bundles = DownloadGitHubBundle::factory('php')->getBundles(
-            FilenameWithChecksum::fromFilename(self::GENUINE_PIE_PHAR),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
         );
 
         foreach ($bundles as $bundle) {
