@@ -8,7 +8,7 @@ use Composer\Downloader\TransportException;
 use Composer\Factory;
 use Composer\IO\NullIO;
 use Composer\Util\HttpDownloader;
-use ThePhpFoundation\Attestation\Attestation;
+use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
@@ -127,7 +127,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         }
     }
 
-    private function assertCertificateSignedByTrustedRoot(Attestation $attestation): void
+    private function assertCertificateSignedByTrustedRoot(Bundle $attestation): void
     {
         $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
@@ -225,7 +225,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     }
 
     /** @param array<non-empty-string, string> $extensions */
-    private function assertCertificateExtensionClaims(Attestation $attestation, array $extensions): void
+    private function assertCertificateExtensionClaims(Bundle $attestation, array $extensions): void
     {
         $attestationCertificateInfo = openssl_x509_parse($attestation->certificate->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
@@ -267,7 +267,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
         }
     }
 
-    private function verifyDsseEnvelopeSignature(int $attestationIndex, Attestation $attestation): void
+    private function verifyDsseEnvelopeSignature(int $attestationIndex, Bundle $attestation): void
     {
         if (! extension_loaded('openssl')) {
             throw NoOpenssl::new();
@@ -289,7 +289,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     }
 
     /** @param non-empty-string $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Attestation $attestation): void
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $attestation): void
     {
         /** @var mixed $decodedPayload */
         $decodedPayload = json_decode($attestation->dsseEnvelope->payload, true);
@@ -322,7 +322,7 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
     /**
      * @param non-empty-string $owner
      *
-     * @return non-empty-list<Attestation>
+     * @return non-empty-list<Bundle>
      */
     private function downloadAttestations(FilenameWithChecksum $file, string $owner): array
     {
@@ -355,10 +355,10 @@ class VerifyAttestationWithOpenSsl implements VerifyAttestation
 
             return array_map(
                 /** @param mixed $attestation */
-                function ($attestation): Attestation {
+                function ($attestation): Bundle {
                     Assert::isArray($attestation);
 
-                    return Attestation::fromAttestationBundleWithDsseEnvelope(
+                    return Bundle::fromBundleWithDsseEnvelope(
                         $this->pullBundleFromUrlOrInline($attestation),
                     );
                 },
