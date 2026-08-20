@@ -8,7 +8,7 @@ use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 
-interface VerifyAttestation
+interface VerifyBundle
 {
     /**
      * @param non-empty-list<Bundle>          $bundles

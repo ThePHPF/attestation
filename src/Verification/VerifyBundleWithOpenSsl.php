@@ -37,7 +37,7 @@ use function trim;
 
 use const OPENSSL_ALGO_SHA256;
 
-class VerifyAttestationWithOpenSsl implements VerifyAttestation
+class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 

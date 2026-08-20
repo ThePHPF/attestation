@@ -13,23 +13,23 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
+use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
 use function file_get_contents;
 use function json_decode;
 
-/** @covers \ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl */
-class VerifyAttestationWithOpenSslTest extends TestCase
+/** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
+class VerifyBundleWithOpenSslTest extends TestCase
 {
     private const BUNDLE_FIXTURE   = __DIR__ . '/../../fixture/bundle.json';
     private const GENUINE_PIE_PHAR = __DIR__ . '/../../fixture/genuine-pie.phar';
 
-    private VerifyAttestationWithOpenSsl $verifier;
+    private VerifyBundleWithOpenSsl $verifier;
 
     public function setUp(): void
     {
-        $this->verifier = VerifyAttestationWithOpenSsl::factory();
+        $this->verifier = VerifyBundleWithOpenSsl::factory();
     }
 
     /** @return non-empty-list<Bundle> */
