@@ -77,3 +77,21 @@ jobs:
         run: composer validate --strict
       - name: Run PHPStan
         run: vendor/bin/phpstan
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 7.4
+          extensions: intl, sodium, zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v7
+      - uses: ramsey/composer-install@v4
+      - run: |
+          ./bin/cli.php verify-bundle \
+            --bundle=test/fixture/bundle.json \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+            test/fixture/pie.phar
