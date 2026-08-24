@@ -9,21 +9,29 @@ carries out are:
  * Checks the digest in the attestation record matches the actual file given
  * Verifies the DSSE envelope signature
 
-## Example usage
+## Library usage
+
+Fetching a bundle from GitHub's Artifact Attestations API and verifying it:
 
 ```php
 <?php
 
-use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\AttestationException;
+use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
-use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
+use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 
 try {
-    VerifyAttestationWithOpenSsl::factory()
+    $file = FilenameWithChecksum::fromFilename($fileYouWantToVerify);
+
+    $bundles = DownloadGitHubBundle::factory('your-org') // the org/user in your GH URL, e.g. https://github.com/your-org
+        ->getBundles($file);
+
+    VerifyBundleWithOpenSsl::factory()
         ->verify(
-            FilenameWithChecksum::fromFilename($fileYouWantToVerify),
-            'your-org', // the org/user in your GH URL, e.g. https://github.com/your-org
+            $bundles,
+            $file,
             'the-filename', // the filename of the subject when it was built
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
@@ -31,7 +39,23 @@ try {
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
             ],
         );
-} catch (FailedToVerifyArtifact $issue) {
-    // Handle verification failure in the way you see fit...
+} catch (AttestationException $issue) {
+    // Handle a failure to fetch or verify the attestation in the way you see fit...
 }
 ```
+
+## CLI usage
+
+A `verify-bundle` command is provided, implementing a subset of the
+[Sigstore conformance CLI protocol](https://github.com/sigstore/sigstore-conformance/blob/main/docs/cli_protocol.md#verify-bundle),
+to verify a local Sigstore bundle file against a local artifact:
+
+```bash
+php bin/cli.php verify-bundle \
+  --bundle=path/to/bundle.json \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  path/to/artifact
+```
+
+Pass `--trusted-root=path/to/trusted-root.jsonl` to verify against a custom
+trusted root instead of the one bundled with this library.

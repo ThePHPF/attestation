@@ -1,0 +1,124 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ThePhpFoundation\Attestation\Command;
+
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\RuntimeException;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use ThePhpFoundation\Attestation\AttestationException;
+use ThePhpFoundation\Attestation\BundleSource\OnDiskBundle;
+use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
+use Webmozart\Assert\Assert;
+
+use function basename;
+use function sprintf;
+
+/**
+ * Implements the `verify-bundle` command of the Sigstore conformance CLI protocol.
+ *
+ * @link https://github.com/sigstore/sigstore-conformance/blob/main/docs/cli_protocol.md#verify-bundle
+ */
+class VerifyBundle extends Command
+{
+    /** @var string */
+    // phpcs:ignore SlevomatCodingStandard.TypeHints.PropertyTypeHint.MissingNativeTypeHint
+    protected static $defaultName = 'verify-bundle';
+
+    protected function configure(): void
+    {
+        $this->addArgument('artifact', InputArgument::REQUIRED, 'The artifact file to verify');
+        $this->addOption('bundle', null, InputOption::VALUE_REQUIRED, 'Path to the Sigstore bundle file');
+        $this->addOption('certificate-oidc-issuer', null, InputOption::VALUE_REQUIRED, 'The expected OIDC issuer of the signing certificate');
+        $this->addOption('trusted-root', null, InputOption::VALUE_REQUIRED, 'Path to a custom trusted root file');
+        $this->addOption('staging', null, InputOption::VALUE_NONE, 'Verify against the Sigstore staging environment (not currently supported)');
+    }
+
+    public function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $artifact              = $this->readArtifactArgument($input);
+        $bundle                = $this->readBundleOption($input);
+        $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
+        $trustedRoot           = $this->readTrustedRootOption($input);
+
+        Assert::fileExists($artifact);
+        $file                = FilenameWithChecksum::fromFilename($artifact);
+        $expectedSubjectName = basename($artifact);
+        Assert::stringNotEmpty($expectedSubjectName);
+
+        $output->writeln(sprintf('Verifying bundle <info>%s</info> for <info>%s</info>...', $bundle, $artifact));
+
+        try {
+            $bundles = (new OnDiskBundle($bundle))->getBundles($file);
+
+            $verifier = $trustedRoot !== null
+                ? new VerifyBundleWithOpenSsl($trustedRoot)
+                : VerifyBundleWithOpenSsl::factory();
+
+            $verifier->verify(
+                $bundles,
+                $file,
+                $expectedSubjectName,
+                [FulcioSigstoreOidExtensions::ISSUER_V2 => $certificateOidcIssuer],
+            );
+        } catch (AttestationException $failure) {
+            $output->writeln(sprintf('❌ %s', $failure->getMessage()));
+
+            return self::FAILURE;
+        }
+
+        $output->writeln('✅ Verified');
+
+        return self::SUCCESS;
+    }
+
+    /** @return non-empty-string */
+    private function readArtifactArgument(InputInterface $input): string
+    {
+        $artifact = $input->getArgument('artifact');
+        Assert::stringNotEmpty($artifact);
+
+        return $artifact;
+    }
+
+    /** @return non-empty-string */
+    private function readBundleOption(InputInterface $input): string
+    {
+        $bundle = $input->getOption('bundle');
+        Assert::nullOrString($bundle);
+
+        if ($bundle === null || $bundle === '') {
+            throw new RuntimeException('Specify --bundle=path/to/bundle.json');
+        }
+
+        return $bundle;
+    }
+
+    /** @return non-empty-string */
+    private function readCertificateOidcIssuerOption(InputInterface $input): string
+    {
+        $certificateOidcIssuer = $input->getOption('certificate-oidc-issuer');
+        Assert::nullOrString($certificateOidcIssuer);
+
+        if ($certificateOidcIssuer === null || $certificateOidcIssuer === '') {
+            throw new RuntimeException('Specify --certificate-oidc-issuer=https://...');
+        }
+
+        return $certificateOidcIssuer;
+    }
+
+    /** @return non-empty-string|null */
+    private function readTrustedRootOption(InputInterface $input): ?string
+    {
+        $trustedRoot = $input->getOption('trusted-root');
+        Assert::nullOrString($trustedRoot);
+
+        return $trustedRoot === null || $trustedRoot === '' ? null : $trustedRoot;
+    }
+}

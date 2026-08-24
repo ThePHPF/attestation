@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\Attestation\Verification\Exception;
+namespace ThePhpFoundation\Attestation\BundleSource\Exception;
 
 use function sprintf;
 
-class FailedToFetchBundleUrl extends FailedToVerifyArtifact
+class FailedToFetchBundleUrl extends BundleSourceException
 {
     public static function fromUrl(string $bundleUrl, ?int $statusCode = null): self
     {

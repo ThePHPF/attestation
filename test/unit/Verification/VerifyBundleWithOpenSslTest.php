@@ -2,37 +2,54 @@
 
 declare(strict_types=1);
 
-namespace ThePhpFoundation\IntegrationTest\Attestation\Verification;
+namespace ThePhpFoundation\UnitTest\Attestation\Verification;
 
 use PHPUnit\Framework\TestCase;
+use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Verification\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\VerifyAttestationWithOpenSsl;
+use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
+use Webmozart\Assert\Assert;
 
-class VerifyAttestationWithOpenSslTest extends TestCase
+use function file_get_contents;
+use function json_decode;
+
+/** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
+class VerifyBundleWithOpenSslTest extends TestCase
 {
-    private const GENUINE_PIE_PHAR                         = __DIR__ . '/../../fixture/genuine-pie.phar';
-    private const PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER = __DIR__ . '/../../fixture/pie-with-attestation-for-different-owner.phar';
+    private const BUNDLE_FIXTURE = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR       = __DIR__ . '/../../fixture/pie.phar';
 
-    private VerifyAttestationWithOpenSsl $verifier;
+    private VerifyBundleWithOpenSsl $verifier;
 
     public function setUp(): void
     {
-        $this->verifier = VerifyAttestationWithOpenSsl::factory();
+        $this->verifier = VerifyBundleWithOpenSsl::factory();
+    }
+
+    /** @return non-empty-list<Bundle> */
+    private function loadFixtureBundle(): array
+    {
+        $contents = file_get_contents(self::BUNDLE_FIXTURE);
+        Assert::stringNotEmpty($contents);
+
+        /** @var array<array-key, mixed> $decoded */
+        $decoded = json_decode($contents, true);
+
+        return [Bundle::fromBundleWithDsseEnvelope($decoded)];
     }
 
     public function testSuccessfulVerification(): void
     {
         $this->expectNotToPerformAssertions();
         $this->verifier->verify(
-            FilenameWithChecksum::fromFilename(self::GENUINE_PIE_PHAR),
-            'php',
+            $this->loadFixtureBundle(),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
             'pie.phar',
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
@@ -42,32 +59,17 @@ class VerifyAttestationWithOpenSslTest extends TestCase
         );
     }
 
-    public function testMissingAttestation(): void
-    {
-        $this->expectException(MissingAttestation::class);
-        $this->verifier->verify(
-            FilenameWithChecksum::fromFilename(__FILE__),
-            'php',
-            'pie.phar',
-            [
-                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
-            ],
-        );
-    }
-
-    public function testArtifactWithAttestationFromDifferentOwner(): void
+    public function testMismatchingExtensionClaimsAreRejected(): void
     {
         $this->expectException(MismatchingExtensionValues::class);
         $this->verifier->verify(
-            FilenameWithChecksum::fromFilename(self::PIE_WITH_ATTESTATION_FOR_DIFFERENT_OWNER),
-            'asgrim',
+            $this->loadFixtureBundle(),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
             'pie.phar',
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/asgrim',
             ],
         );
     }
@@ -84,7 +86,7 @@ class VerifyAttestationWithOpenSslTest extends TestCase
         self::markTestIncomplete();
     }
 
-    public function testDsseEnvelopetSignatureVerificationFailed(): void
+    public function testDsseEnvelopeSignatureVerificationFailed(): void
     {
         $this->expectException(SignatureVerificationFailed::class);
         self::markTestIncomplete();

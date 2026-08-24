@@ -7,7 +7,7 @@ namespace ThePhpFoundation\Attestation;
 use Webmozart\Assert\Assert;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
-final class Attestation
+final class Bundle
 {
     public PemCertificate $certificate;
     public DsseEnvelope $dsseEnvelope;
@@ -19,7 +19,7 @@ final class Attestation
     }
 
     /** @param array<array-key, mixed> $bundle */
-    public static function fromAttestationBundleWithDsseEnvelope(array $bundle): self
+    public static function fromBundleWithDsseEnvelope(array $bundle): self
     {
         Assert::keyExists($bundle, 'verificationMaterial');
         Assert::isArray($bundle['verificationMaterial']);

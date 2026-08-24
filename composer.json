@@ -6,7 +6,8 @@
         "php": "^7.4||^8.0",
         "ext-json": "*",
         "composer/composer": "^2.2",
-        "webmozart/assert": "^1.11"
+        "symfony/console": "^5.4 || ^6.0 || ^7.0 || ^8.0",
+        "webmozart/assert": "^1.11 || ^2.0"
     },
     "require-dev": {
         "doctrine/coding-standard": "^13.0 || ^14.0",
@@ -39,12 +40,10 @@
             "email": "james@asgrim.com"
         }
     ],
+    "bin": ["bin/cli.php"],
     "config": {
         "sort-packages": true,
         "preferred-install": "dist",
-        "platform": {
-            "php": "7.4.0"
-        },
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true
         }
