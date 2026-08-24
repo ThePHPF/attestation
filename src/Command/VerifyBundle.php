@@ -35,6 +35,7 @@ class VerifyBundle extends Command
     {
         $this->addArgument('artifact', InputArgument::REQUIRED, 'The artifact file to verify');
         $this->addOption('bundle', null, InputOption::VALUE_REQUIRED, 'Path to the Sigstore bundle file');
+        $this->addOption('certificate-identity', null, InputOption::VALUE_REQUIRED, 'The expected signing certificate identity');
         $this->addOption('certificate-oidc-issuer', null, InputOption::VALUE_REQUIRED, 'The expected OIDC issuer of the signing certificate');
         $this->addOption('trusted-root', null, InputOption::VALUE_REQUIRED, 'Path to a custom trusted root file');
         $this->addOption('staging', null, InputOption::VALUE_NONE, 'Verify against the Sigstore staging environment (not currently supported)');
@@ -44,6 +45,7 @@ class VerifyBundle extends Command
     {
         $artifact              = $this->readArtifactArgument($input);
         $bundle                = $this->readBundleOption($input);
+        $certificateIdentity   = $this->readCertificateIdentityOption($input);
         $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
         $trustedRoot           = $this->readTrustedRootOption($input);
 
@@ -66,6 +68,7 @@ class VerifyBundle extends Command
                 $file,
                 $expectedSubjectName,
                 [FulcioSigstoreOidExtensions::ISSUER_V2 => $certificateOidcIssuer],
+                $certificateIdentity,
             );
         } catch (AttestationException $failure) {
             $output->writeln(sprintf('❌ %s', $failure->getMessage()));
@@ -98,6 +101,19 @@ class VerifyBundle extends Command
         }
 
         return $bundle;
+    }
+
+    /** @return non-empty-string */
+    private function readCertificateIdentityOption(InputInterface $input): string
+    {
+        $certificateIdentity = $input->getOption('certificate-identity');
+        Assert::nullOrString($certificateIdentity);
+
+        if ($certificateIdentity === null || $certificateIdentity === '') {
+            throw new RuntimeException('Specify --certificate-identity=...');
+        }
+
+        return $certificateIdentity;
     }
 
     /** @return non-empty-string */

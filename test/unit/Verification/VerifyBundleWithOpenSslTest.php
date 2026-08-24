@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -22,8 +23,9 @@ use function json_decode;
 /** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
 class VerifyBundleWithOpenSslTest extends TestCase
 {
-    private const BUNDLE_FIXTURE = __DIR__ . '/../../fixture/bundle.json';
-    private const PIE_PHAR       = __DIR__ . '/../../fixture/pie.phar';
+    private const BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR             = __DIR__ . '/../../fixture/pie.phar';
+    private const CERTIFICATE_IDENTITY = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -56,6 +58,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
             ],
+            self::CERTIFICATE_IDENTITY,
         );
     }
 
@@ -71,6 +74,23 @@ class VerifyBundleWithOpenSslTest extends TestCase
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/asgrim',
             ],
+            self::CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testCertificateIdentityMismatchIsRejected(): void
+    {
+        $this->expectException(CertificateIdentityMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
+            'pie.phar',
+            [
+                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
+                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
+            ],
+            'https://github.com/some-other-org/some-other-repo/.github/workflows/build.yml@refs/heads/main',
         );
     }
 

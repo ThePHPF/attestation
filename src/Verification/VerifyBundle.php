@@ -14,6 +14,7 @@ interface VerifyBundle
      * @param non-empty-list<Bundle>          $bundles
      * @param non-empty-string                $expectedSubjectName
      * @param array<non-empty-string, string> $extensionsToVerify
+     * @param non-empty-string                $expectedCertificateIdentity
      *
      * @throws FailedToVerifyArtifact
      */
@@ -21,6 +22,7 @@ interface VerifyBundle
         array $bundles,
         FilenameWithChecksum $file,
         string $expectedSubjectName,
-        array $extensionsToVerify
+        array $extensionsToVerify,
+        string $expectedCertificateIdentity
     ): void;
 }

@@ -6,6 +6,7 @@ carries out are:
 
  * Verifies the attestation certificate was signed by a trusted root
  * Verifies the given OID extensions match what you expect
+ * Verifies the certificate's signer identity (subjectAltName) matches what you expect
  * Checks the digest in the attestation record matches the actual file given
  * Verifies the DSSE envelope signature
 
@@ -38,6 +39,8 @@ try {
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
             ],
+            // the workflow that's expected to have produced the signing certificate
+            'https://github.com/your-org/your-repo/.github/workflows/build.yml@refs/heads/main',
         );
 } catch (AttestationException $issue) {
     // Handle a failure to fetch or verify the attestation in the way you see fit...
@@ -53,6 +56,7 @@ to verify a local Sigstore bundle file against a local artifact:
 ```bash
 php bin/cli.php verify-bundle \
   --bundle=path/to/bundle.json \
+  --certificate-identity=https://github.com/your-org/your-repo/.github/workflows/build.yml@refs/heads/main \
   --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
   path/to/artifact
 ```

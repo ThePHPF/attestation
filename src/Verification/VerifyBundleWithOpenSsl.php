@@ -7,6 +7,7 @@ namespace ThePhpFoundation\Attestation\Verification;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\PemCertificate;
+use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
@@ -18,11 +19,13 @@ use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFai
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
+use function array_map;
 use function count;
 use function explode;
 use function extension_loaded;
 use function file_get_contents;
 use function hash_equals;
+use function in_array;
 use function is_array;
 use function is_string;
 use function json_decode;
@@ -61,7 +64,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         array $bundles,
         FilenameWithChecksum $file,
         string $expectedSubjectName,
-        array $extensionsToVerify
+        array $extensionsToVerify,
+        string $expectedCertificateIdentity
     ): void {
         foreach ($bundles as $bundleIndex => $bundle) {
             /**
@@ -78,6 +82,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
+
+            $this->assertCertificateIdentity($bundle, $expectedCertificateIdentity);
 
             $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle);
 
@@ -222,6 +228,31 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             if ($derDecodedValue !== $expectedValue) {
                 throw MismatchingExtensionValues::from($extension, $expectedValue, $derDecodedValue);
             }
+        }
+    }
+
+    private function assertCertificateIdentity(Bundle $bundle, string $expectedCertificateIdentity): void
+    {
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        Assert::isArray($attestationCertificateInfo);
+        Assert::keyExists($attestationCertificateInfo, 'extensions');
+        Assert::isArray($attestationCertificateInfo['extensions']);
+        Assert::keyExists($attestationCertificateInfo['extensions'], 'subjectAltName');
+        Assert::stringNotEmpty($attestationCertificateInfo['extensions']['subjectAltName']);
+
+        $subjectAltName = $attestationCertificateInfo['extensions']['subjectAltName'];
+
+        $identities = array_map(
+            static function (string $entry): string {
+                $parts = explode(':', trim($entry), 2);
+
+                return $parts[1] ?? $parts[0];
+            },
+            explode(',', $subjectAltName),
+        );
+
+        if (! in_array($expectedCertificateIdentity, $identities, true)) {
+            throw CertificateIdentityMismatch::from($expectedCertificateIdentity, $subjectAltName);
         }
     }
 
