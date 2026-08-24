@@ -44,9 +44,6 @@
     "config": {
         "sort-packages": true,
         "preferred-install": "dist",
-        "platform": {
-            "php": "7.4.0"
-        },
         "allow-plugins": {
             "dealerdirect/phpcodesniffer-composer-installer": true
         }
