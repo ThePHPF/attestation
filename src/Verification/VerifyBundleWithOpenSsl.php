@@ -47,6 +47,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @param non-empty-string $trustedRootFilePath */
     public function __construct(string $trustedRootFilePath)
     {
+        Assert::fileExists($trustedRootFilePath);
         $this->trustedRootFilePath = $trustedRootFilePath;
     }
 
