@@ -47,6 +47,7 @@ class VerifyBundle extends Command
         $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
         $trustedRoot           = $this->readTrustedRootOption($input);
 
+        Assert::fileExists($artifact);
         $file                = FilenameWithChecksum::fromFilename($artifact);
         $expectedSubjectName = basename($artifact);
         Assert::stringNotEmpty($expectedSubjectName);
