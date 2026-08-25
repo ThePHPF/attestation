@@ -12,7 +12,7 @@ interface VerifyBundle
 {
     /**
      * @param non-empty-list<Bundle>          $bundles
-     * @param non-empty-string                $expectedSubjectName
+     * @param non-empty-string|null           $expectedSubjectName
      * @param array<non-empty-string, string> $extensionsToVerify
      * @param non-empty-string                $expectedCertificateIdentity
      *
@@ -21,7 +21,7 @@ interface VerifyBundle
     public function verify(
         array $bundles,
         FilenameWithChecksum $file,
-        string $expectedSubjectName,
+        ?string $expectedSubjectName,
         array $extensionsToVerify,
         string $expectedCertificateIdentity
     ): void;

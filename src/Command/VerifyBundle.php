@@ -19,6 +19,9 @@ use Webmozart\Assert\Assert;
 
 use function basename;
 use function sprintf;
+use function str_starts_with;
+use function strlen;
+use function substr;
 
 /**
  * Implements the `verify-bundle` command of the Sigstore conformance CLI protocol.
@@ -27,13 +30,15 @@ use function sprintf;
  */
 class VerifyBundle extends Command
 {
+    private const SHA256_PREFIX = 'sha256:';
+
     /** @var string */
     // phpcs:ignore SlevomatCodingStandard.TypeHints.PropertyTypeHint.MissingNativeTypeHint
     protected static $defaultName = 'verify-bundle';
 
     protected function configure(): void
     {
-        $this->addArgument('artifact', InputArgument::REQUIRED, 'The artifact file to verify');
+        $this->addArgument('artifact', InputArgument::REQUIRED, 'The artifact file to verify, or a sha256:<digest>');
         $this->addOption('bundle', null, InputOption::VALUE_REQUIRED, 'Path to the Sigstore bundle file');
         $this->addOption('certificate-identity', null, InputOption::VALUE_REQUIRED, 'The expected signing certificate identity');
         $this->addOption('certificate-oidc-issuer', null, InputOption::VALUE_REQUIRED, 'The expected OIDC issuer of the signing certificate');
@@ -49,10 +54,18 @@ class VerifyBundle extends Command
         $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
         $trustedRoot           = $this->readTrustedRootOption($input);
 
-        Assert::fileExists($artifact);
-        $file                = FilenameWithChecksum::fromFilename($artifact);
-        $expectedSubjectName = basename($artifact);
-        Assert::stringNotEmpty($expectedSubjectName);
+        if (str_starts_with($artifact, self::SHA256_PREFIX)) {
+            $checksum = substr($artifact, strlen(self::SHA256_PREFIX));
+            Assert::stringNotEmpty($checksum);
+
+            $file                = FilenameWithChecksum::fromFilenameAndChecksum($artifact, $checksum);
+            $expectedSubjectName = null;
+        } else {
+            Assert::fileExists($artifact);
+            $file                = FilenameWithChecksum::fromFilename($artifact);
+            $expectedSubjectName = basename($artifact);
+            Assert::stringNotEmpty($expectedSubjectName);
+        }
 
         $output->writeln(sprintf('Verifying bundle <info>%s</info> for <info>%s</info>...', $bundle, $artifact));
 

@@ -68,7 +68,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     public function verify(
         array $bundles,
         FilenameWithChecksum $file,
-        string $expectedSubjectName,
+        ?string $expectedSubjectName,
         array $extensionsToVerify,
         string $expectedCertificateIdentity
     ): void {
@@ -329,8 +329,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
-    /** @param non-empty-string $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, DsseEnvelope $envelope): void
+    /** @param non-empty-string|null $expectedSubjectName */
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, ?string $expectedSubjectName, DsseEnvelope $envelope): void
     {
         /** @var mixed $decodedPayload */
         $decodedPayload = json_decode($envelope->payload, true);
@@ -343,7 +343,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             || ! array_key_exists(0, $decodedPayload['subject'])
             || ! is_array($decodedPayload['subject'][0])
             || ! array_key_exists('name', $decodedPayload['subject'][0])
-            || $decodedPayload['subject'][0]['name'] !== $expectedSubjectName
+            || ($expectedSubjectName !== null && $decodedPayload['subject'][0]['name'] !== $expectedSubjectName)
             || ! array_key_exists('digest', $decodedPayload['subject'][0])
             || ! is_array($decodedPayload['subject'][0]['digest'])
             || ! array_key_exists('sha256', $decodedPayload['subject'][0]['digest'])

@@ -12,10 +12,15 @@ use ThePhpFoundation\Attestation\Command\VerifyBundle;
 /** @covers \ThePhpFoundation\Attestation\Command\VerifyBundle */
 final class VerifyBundleTest extends TestCase
 {
-    private const BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle.json';
-    private const PIE_PHAR             = __DIR__ . '/../../fixture/pie.phar';
-    private const OIDC_ISSUER          = 'https://token.actions.githubusercontent.com';
-    private const CERTIFICATE_IDENTITY = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
+    private const BUNDLE_FIXTURE                         = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR                               = __DIR__ . '/../../fixture/pie.phar';
+    private const PIE_PHAR_DIGEST                        = 'sha256:5ea836df7244a05d62b300a2294b5b6ae10c951f4f6a5e0d2ae2de84541142f0';
+    private const OIDC_ISSUER                            = 'https://token.actions.githubusercontent.com';
+    private const CERTIFICATE_IDENTITY                   = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
+    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/message-signature-bundle.json';
+    private const MESSAGE_SIGNATURE_ARTIFACT             = __DIR__ . '/../../fixture/message-signature-artifact.txt';
+    private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST      = 'sha256:a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
+    private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
 
     private function commandTester(): CommandTester
     {
@@ -35,6 +40,51 @@ final class VerifyBundleTest extends TestCase
 
         self::assertSame(Command::SUCCESS, $statusCode);
         self::assertStringContainsString('Verified', $tester->getDisplay());
+    }
+
+    public function testVerifiesAGenuineBundleSuccessfullyInDigestMode(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::BUNDLE_FIXTURE,
+            '--certificate-identity' => self::CERTIFICATE_IDENTITY,
+            '--certificate-oidc-issuer' => self::OIDC_ISSUER,
+            'artifact' => self::PIE_PHAR_DIGEST,
+        ]);
+
+        self::assertSame(Command::SUCCESS, $statusCode);
+        self::assertStringContainsString('Verified', $tester->getDisplay());
+    }
+
+    public function testVerifiesAMessageSignatureBundleSuccessfully(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE,
+            '--certificate-identity' => self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+            '--certificate-oidc-issuer' => self::OIDC_ISSUER,
+            'artifact' => self::MESSAGE_SIGNATURE_ARTIFACT,
+        ]);
+
+        self::assertSame(Command::SUCCESS, $statusCode);
+        self::assertStringContainsString('Verified', $tester->getDisplay());
+    }
+
+    public function testFailsWhenMessageSignatureBundleIsVerifiedInDigestMode(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE,
+            '--certificate-identity' => self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+            '--certificate-oidc-issuer' => self::OIDC_ISSUER,
+            'artifact' => self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
+        ]);
+
+        self::assertSame(Command::FAILURE, $statusCode);
+        self::assertStringContainsString('without the real artifact file', $tester->getDisplay());
     }
 
     public function testFailsWhenCertificateOidcIssuerDoesNotMatch(): void
