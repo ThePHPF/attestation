@@ -11,7 +11,7 @@ use function sprintf;
 use function strlen;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
-final class DsseEnvelope
+final class DsseEnvelope implements SigstoreBundleContent
 {
     /** @var non-empty-string */
     public string $payload;
