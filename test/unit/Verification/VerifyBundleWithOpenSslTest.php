@@ -18,8 +18,14 @@ use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFai
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
+use function base64_decode;
+use function base64_encode;
+use function chr;
 use function file_get_contents;
 use function json_decode;
+use function ord;
+use function strlen;
+use function substr;
 
 /** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
 class VerifyBundleWithOpenSslTest extends TestCase
@@ -47,6 +53,30 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
         /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode($contents, true);
+
+        return [Bundle::fromBundle($decoded)];
+    }
+
+    /** @return non-empty-list<Bundle> */
+    private function loadMessageSignatureFixtureBundleWithTamperedSignature(): array
+    {
+        $contents = file_get_contents(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE);
+        Assert::stringNotEmpty($contents);
+
+        /** @var array<array-key, mixed> $decoded */
+        $decoded = json_decode($contents, true);
+
+        Assert::isArray($decoded['messageSignature']);
+        Assert::stringNotEmpty($decoded['messageSignature']['signature']);
+
+        $signatureBytes = base64_decode($decoded['messageSignature']['signature']);
+        Assert::stringNotEmpty($signatureBytes);
+
+        // Flip the final byte, corrupting the signature value whilst keeping the DER structure intact.
+        $lastByte               = ord($signatureBytes[strlen($signatureBytes) - 1]);
+        $tamperedSignatureBytes = substr($signatureBytes, 0, -1) . chr($lastByte ^ 0xFF);
+
+        $decoded['messageSignature']['signature'] = base64_encode($tamperedSignatureBytes);
 
         return [Bundle::fromBundle($decoded)];
     }
@@ -88,6 +118,30 @@ class VerifyBundleWithOpenSslTest extends TestCase
                 'sha256:' . self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
                 self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
             ),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testMessageSignatureVerificationFailedForTamperedSignature(): void
+    {
+        $this->expectException(SignatureVerificationFailed::class);
+        $this->verifier->verify(
+            $this->loadMessageSignatureFixtureBundleWithTamperedSignature(),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testMessageSignatureDigestMismatch(): void
+    {
+        $this->expectException(DigestMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,

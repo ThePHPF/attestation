@@ -7,6 +7,7 @@ namespace ThePhpFoundation\UnitTest\Attestation;
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\DsseEnvelope;
+use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
 use Webmozart\Assert\Assert;
 
@@ -18,6 +19,7 @@ final class BundleTest extends TestCase
 {
     private const BUNDLE_FIXTURE                   = __DIR__ . '/../fixture/bundle.json';
     private const CERTIFICATE_CHAIN_BUNDLE_FIXTURE = __DIR__ . '/../fixture/certificate-chain-bundle.json';
+    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE = __DIR__ . '/../fixture/message-signature-bundle.json';
 
     public function testFromBundleWithDsseEnvelope(): void
     {
@@ -59,5 +61,21 @@ final class BundleTest extends TestCase
 
         self::assertSame($expectedLeaf->decoratedCertificate(), $bundle->certificate->decoratedCertificate());
         self::assertNotSame($unexpectedNonLeaf->decoratedCertificate(), $bundle->certificate->decoratedCertificate());
+    }
+
+    public function testFromBundleWithMessageSignature(): void
+    {
+        $contents = file_get_contents(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE);
+        self::assertIsString($contents);
+
+        /** @var array<array-key, mixed> $decoded */
+        $decoded = json_decode($contents, true);
+
+        $bundle = Bundle::fromBundle($decoded);
+
+        self::assertNotSame('', $bundle->certificate->decoratedCertificate());
+        self::assertInstanceOf(MessageSignature::class, $bundle->content);
+        self::assertNotSame('', $bundle->content->digestHex);
+        self::assertNotSame('', $bundle->content->signature);
     }
 }
