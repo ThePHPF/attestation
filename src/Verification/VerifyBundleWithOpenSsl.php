@@ -7,7 +7,9 @@ namespace ThePhpFoundation\Attestation\Verification;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
+use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
@@ -17,6 +19,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValu
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -28,6 +31,7 @@ use function file_get_contents;
 use function hash_equals;
 use function in_array;
 use function is_array;
+use function is_readable;
 use function is_string;
 use function json_decode;
 use function openssl_pkey_get_public;
@@ -86,9 +90,15 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $this->assertCertificateIdentity($bundle, $expectedCertificateIdentity);
 
-            $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle);
-
-            $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle);
+            if ($bundle->content instanceof DsseEnvelope) {
+                $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle->content);
+                $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle->certificate, $bundle->content);
+            } elseif ($bundle->content instanceof MessageSignature) {
+                $this->assertDigestFromMessageSignatureMatchesActual($file, $bundle->content);
+                $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate, $bundle->content);
+            } else {
+                throw UnsupportedBundleContent::new();
+            }
         }
     }
 
@@ -257,21 +267,19 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
-    private function verifyDsseEnvelopeSignature(int $bundleIndex, Bundle $bundle): void
+    private function verifyDsseEnvelopeSignature(int $bundleIndex, PemCertificate $certificate, DsseEnvelope $envelope): void
     {
         if (! extension_loaded('openssl')) {
             throw NoOpenssl::new();
         }
 
-        Assert::isInstanceOf($bundle->content, DsseEnvelope::class);
-
-        $publicKey = openssl_pkey_get_public($bundle->certificate->decoratedCertificate());
+        $publicKey = openssl_pkey_get_public($certificate->decoratedCertificate());
         Assert::notFalse($publicKey);
 
         if (
             openssl_verify(
-                $bundle->content->preAuthenticationEncoding(),
-                $bundle->content->signature,
+                $envelope->preAuthenticationEncoding(),
+                $envelope->signature,
                 $publicKey,
                 OPENSSL_ALGO_SHA256,
             ) !== 1
@@ -280,13 +288,52 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
-    /** @param non-empty-string $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $bundle): void
+    /**
+     * This requires the artifact on disk to verify the signature. A digest-only verification is specifically not
+     * supported, as there's nothing to verify against.
+     */
+    private function verifyMessageSignature(int $bundleIndex, FilenameWithChecksum $file, PemCertificate $certificate, MessageSignature $content): void
     {
-        Assert::isInstanceOf($bundle->content, DsseEnvelope::class);
+        if (! extension_loaded('openssl')) {
+            throw NoOpenssl::new();
+        }
 
+        if (! is_readable($file->filename())) {
+            throw CannotVerifyMessageSignatureWithoutArtifact::new();
+        }
+
+        $artifactContents = file_get_contents($file->filename());
+        Assert::stringNotEmpty($artifactContents);
+
+        $publicKey = openssl_pkey_get_public($certificate->decoratedCertificate());
+        Assert::notFalse($publicKey);
+
+        if (
+            openssl_verify(
+                $artifactContents,
+                $content->signature,
+                $publicKey,
+                OPENSSL_ALGO_SHA256,
+            ) !== 1
+        ) {
+            throw SignatureVerificationFailed::forIndex($bundleIndex);
+        }
+    }
+
+    private function assertDigestFromMessageSignatureMatchesActual(FilenameWithChecksum $file, MessageSignature $content): void
+    {
+        $expected = $file->checksum();
+        $actual   = $content->digestHex;
+        if (! hash_equals($expected, $actual)) {
+            throw DigestMismatch::fromChecksumMismatch($expected, $actual);
+        }
+    }
+
+    /** @param non-empty-string $expectedSubjectName */
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, DsseEnvelope $envelope): void
+    {
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($bundle->content->payload, true);
+        $decodedPayload = json_decode($envelope->payload, true);
 
         if (
             ! is_array($decodedPayload)
