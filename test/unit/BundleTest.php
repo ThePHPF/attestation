@@ -6,6 +6,7 @@ namespace ThePhpFoundation\UnitTest\Attestation;
 
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
+use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\PemCertificate;
 use Webmozart\Assert\Assert;
 
@@ -26,10 +27,11 @@ final class BundleTest extends TestCase
         /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode($contents, true);
 
-        $bundle = Bundle::fromBundleWithDsseEnvelope($decoded);
+        $bundle = Bundle::fromBundle($decoded);
 
         self::assertNotSame('', $bundle->certificate->decoratedCertificate());
-        self::assertNotSame('', $bundle->dsseEnvelope->payload);
+        self::assertInstanceOf(DsseEnvelope::class, $bundle->content);
+        self::assertNotSame('', $bundle->content->payload);
     }
 
     public function testFromBundleWithACertificateChainUsesTheLeafCertificate(): void
@@ -40,7 +42,7 @@ final class BundleTest extends TestCase
         /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode($contents, true);
 
-        $bundle = Bundle::fromBundleWithDsseEnvelope($decoded);
+        $bundle = Bundle::fromBundle($decoded);
 
         Assert::isArray($decoded['verificationMaterial']);
         Assert::isArray($decoded['verificationMaterial']['x509CertificateChain']);

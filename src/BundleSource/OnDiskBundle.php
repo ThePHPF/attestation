@@ -50,6 +50,6 @@ class OnDiskBundle implements BundleSource
             throw FailedToReadBundleFile::notAJsonObject($this->bundleFilePath);
         }
 
-        return [Bundle::fromBundleWithDsseEnvelope($decoded)];
+        return [Bundle::fromBundle($decoded)];
     }
 }

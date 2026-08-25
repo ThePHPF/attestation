@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ThePhpFoundation\Attestation\Verification;
 
 use ThePhpFoundation\Attestation\Bundle;
+use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
@@ -262,13 +263,15 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             throw NoOpenssl::new();
         }
 
+        Assert::isInstanceOf($bundle->content, DsseEnvelope::class);
+
         $publicKey = openssl_pkey_get_public($bundle->certificate->decoratedCertificate());
         Assert::notFalse($publicKey);
 
         if (
             openssl_verify(
-                $bundle->dsseEnvelope->preAuthenticationEncoding(),
-                $bundle->dsseEnvelope->signature,
+                $bundle->content->preAuthenticationEncoding(),
+                $bundle->content->signature,
                 $publicKey,
                 OPENSSL_ALGO_SHA256,
             ) !== 1
@@ -280,8 +283,10 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @param non-empty-string $expectedSubjectName */
     private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $bundle): void
     {
+        Assert::isInstanceOf($bundle->content, DsseEnvelope::class);
+
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($bundle->dsseEnvelope->payload, true);
+        $decodedPayload = json_decode($bundle->content->payload, true);
 
         if (
             ! is_array($decodedPayload)

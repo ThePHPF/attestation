@@ -98,7 +98,7 @@ class DownloadGitHubBundle implements BundleSource
                 function ($attestation): Bundle {
                     Assert::isArray($attestation);
 
-                    return Bundle::fromBundleWithDsseEnvelope(
+                    return Bundle::fromBundle(
                         $this->pullBundleFromUrlOrInline($attestation),
                     );
                 },

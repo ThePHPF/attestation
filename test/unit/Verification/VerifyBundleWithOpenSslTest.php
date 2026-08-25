@@ -43,7 +43,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
         /** @var array<array-key, mixed> $decoded */
         $decoded = json_decode($contents, true);
 
-        return [Bundle::fromBundleWithDsseEnvelope($decoded)];
+        return [Bundle::fromBundle($decoded)];
     }
 
     public function testSuccessfulVerification(): void

@@ -12,27 +12,39 @@ use function array_key_exists;
 final class Bundle
 {
     public PemCertificate $certificate;
-    public DsseEnvelope $dsseEnvelope;
+    public SigstoreBundleContent $content;
 
-    private function __construct(PemCertificate $certificate, DsseEnvelope $dsseEnvelope)
+    private function __construct(PemCertificate $certificate, SigstoreBundleContent $content)
     {
-        $this->certificate  = $certificate;
-        $this->dsseEnvelope = $dsseEnvelope;
+        $this->certificate = $certificate;
+        $this->content     = $content;
     }
 
     /** @param array<array-key, mixed> $bundle */
-    public static function fromBundleWithDsseEnvelope(array $bundle): self
+    public static function fromBundle(array $bundle): self
     {
         Assert::keyExists($bundle, 'verificationMaterial');
         Assert::isArray($bundle['verificationMaterial']);
 
-        Assert::keyExists($bundle, 'dsseEnvelope');
-        Assert::isArray($bundle['dsseEnvelope']);
-
         return new self(
             self::certificateFromVerificationMaterial($bundle['verificationMaterial']),
-            DsseEnvelope::fromBundleDsseEnvelope($bundle['dsseEnvelope']),
+            self::contentFromBundle($bundle),
         );
+    }
+
+    /** @param array<array-key, mixed> $bundle */
+    private static function contentFromBundle(array $bundle): SigstoreBundleContent
+    {
+        if (array_key_exists('dsseEnvelope', $bundle)) {
+            Assert::isArray($bundle['dsseEnvelope']);
+
+            return DsseEnvelope::fromBundleDsseEnvelope($bundle['dsseEnvelope']);
+        }
+
+        Assert::keyExists($bundle, 'messageSignature');
+        Assert::isArray($bundle['messageSignature']);
+
+        return MessageSignature::fromBundleMessageSignature($bundle['messageSignature']);
     }
 
     /**
