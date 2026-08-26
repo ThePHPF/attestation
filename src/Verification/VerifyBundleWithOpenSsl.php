@@ -9,6 +9,7 @@ use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
+use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
@@ -21,13 +22,17 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
+use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
+use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
 use function array_map;
+use function base64_decode;
+use function bin2hex;
 use function count;
 use function explode;
 use function extension_loaded;
@@ -60,6 +65,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         'application/vnd.dev.sigstore.bundle+json;version=0.3',
         'application/vnd.dev.sigstore.bundle.v0.3+json',
     ];
+
+    private const SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS = 'PKIX_ECDSA_P256_SHA_256';
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -342,6 +349,71 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
          * @psalm-suppress MixedArgument
          */
         throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
+    }
+
+    /**
+     * @param non-empty-string $logId
+     *
+     * @return array{publicKey: PemPublicKey, keyId: non-empty-string}
+     */
+    private function resolveTransparencyLogPublicKey(string $logId): array
+    {
+        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
+        Assert::stringNotEmpty($trustedRootCert);
+        $trustedRootJsonLines = explode("\n", trim($trustedRootCert));
+
+        foreach ($trustedRootJsonLines as $jsonLine) {
+            /** @var mixed $decoded */
+            $decoded = json_decode($jsonLine, true);
+
+            // No transparency logs defined in this JSON line, skip it...
+            if (
+                ! is_array($decoded)
+                || ! array_key_exists('tlogs', $decoded)
+                || ! is_array($decoded['tlogs'])
+            ) {
+                continue;
+            }
+
+            /** @var mixed $tlog */
+            foreach ($decoded['tlogs'] as $tlog) {
+                // Not in the expected shape, skip it...
+                if (
+                    ! is_array($tlog)
+                    || ! array_key_exists('logId', $tlog)
+                    || ! is_array($tlog['logId'])
+                    || ! array_key_exists('keyId', $tlog['logId'])
+                    || ! is_string($tlog['logId']['keyId'])
+                    || $tlog['logId']['keyId'] === ''
+                    || ! array_key_exists('publicKey', $tlog)
+                    || ! is_array($tlog['publicKey'])
+                    || ! array_key_exists('rawBytes', $tlog['publicKey'])
+                    || ! is_string($tlog['publicKey']['rawBytes'])
+                    || $tlog['publicKey']['rawBytes'] === ''
+                    || ! array_key_exists('keyDetails', $tlog['publicKey'])
+                    || ! is_string($tlog['publicKey']['keyDetails'])
+                    || $tlog['publicKey']['keyDetails'] === ''
+                ) {
+                    continue;
+                }
+
+                $tlogKeyId = base64_decode($tlog['logId']['keyId']);
+                if ($tlogKeyId === '' || ! hash_equals($logId, $tlogKeyId)) {
+                    continue;
+                }
+
+                if ($tlog['publicKey']['keyDetails'] !== self::SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS) {
+                    throw UnsupportedTransparencyLogKeyAlgorithm::fromKeyDetails($tlog['publicKey']['keyDetails']);
+                }
+
+                return [
+                    'publicKey' => PemPublicKey::fromBase64EncodedDerBytes($tlog['publicKey']['rawBytes']),
+                    'keyId' => $tlogKeyId,
+                ];
+            }
+        }
+
+        throw NoTransparencyLogKeyInTrustedRoot::fromLogId(bin2hex($logId));
     }
 
     /** @param array<non-empty-string, string> $extensions */
