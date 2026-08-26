@@ -11,14 +11,20 @@ use function array_key_exists;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class Bundle
 {
+    /** @var non-empty-string */
+    public string $mediaType;
     public PemCertificate $certificate;
     public SigstoreBundleContent $content;
     /** @var list<TransparencyLogEntry> */
     public array $transparencyLogEntries;
 
-    /** @param list<TransparencyLogEntry> $transparencyLogEntries */
-    private function __construct(PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries)
+    /**
+     * @param non-empty-string           $mediaType
+     * @param list<TransparencyLogEntry> $transparencyLogEntries
+     */
+    private function __construct(string $mediaType, PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries)
     {
+        $this->mediaType              = $mediaType;
         $this->certificate            = $certificate;
         $this->content                = $content;
         $this->transparencyLogEntries = $transparencyLogEntries;
@@ -27,10 +33,13 @@ final class Bundle
     /** @param array<array-key, mixed> $bundle */
     public static function fromBundle(array $bundle): self
     {
+        Assert::keyExists($bundle, 'mediaType');
+        Assert::stringNotEmpty($bundle['mediaType']);
         Assert::keyExists($bundle, 'verificationMaterial');
         Assert::isArray($bundle['verificationMaterial']);
 
         return new self(
+            $bundle['mediaType'],
             self::certificateFromVerificationMaterial($bundle['verificationMaterial']),
             self::contentFromBundle($bundle),
             self::transparencyLogEntriesFromVerificationMaterial($bundle['verificationMaterial']),

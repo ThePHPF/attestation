@@ -22,6 +22,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTru
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
+use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -50,6 +51,13 @@ use const OPENSSL_ALGO_SHA256;
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
+
+    private const SUPPORTED_BUNDLE_MEDIA_TYPES = [
+        'application/vnd.dev.sigstore.bundle+json;version=0.1',
+        'application/vnd.dev.sigstore.bundle+json;version=0.2',
+        'application/vnd.dev.sigstore.bundle+json;version=0.3',
+        'application/vnd.dev.sigstore.bundle.v0.3+json',
+    ];
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -86,6 +94,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
              *  - https://docs.sigstore.dev/logging/verify-release/
              *  - https://github.com/secure-systems-lab/dsse/blob/master/protocol.md#protocol
              */
+            $this->assertBundleMediaTypeIsSupported($bundle);
+
             $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
@@ -105,6 +115,13 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             } else {
                 throw UnsupportedBundleContent::new();
             }
+        }
+    }
+
+    private function assertBundleMediaTypeIsSupported(Bundle $bundle): void
+    {
+        if (! in_array($bundle->mediaType, self::SUPPORTED_BUNDLE_MEDIA_TYPES, true)) {
+            throw UnsupportedBundleMediaType::fromMediaType($bundle->mediaType);
         }
     }
 

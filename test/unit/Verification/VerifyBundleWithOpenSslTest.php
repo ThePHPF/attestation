@@ -17,6 +17,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -42,6 +43,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE        = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
     private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
     private const UNTRUSTED_SA_CERTIFICATE_IDENTITY        = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
+    private const UNKNOWN_VERSION_BUNDLE_FIXTURE           = __DIR__ . '/../../fixture/bundle-unknown-version-fail.json';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -174,6 +176,18 @@ class VerifyBundleWithOpenSslTest extends TestCase
             'message-signature-artifact.txt',
             [],
             self::UNTRUSTED_SA_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAnUnsupportedMediaTypeVersion(): void
+    {
+        $this->expectException(UnsupportedBundleMediaType::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::UNKNOWN_VERSION_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 

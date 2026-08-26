@@ -148,7 +148,6 @@ jobs:
             test_verify[[]PATH-incorrect-public-key_fail]
             test_verify[[]PATH-dsse-mismatch-envelope_fail]
             test_verify[[]PATH-dsse-mismatch-sig_fail]
-            test_verify[[]PATH-bundle-unknown-version_fail]
             test_verify[[]DIGEST-dsse-mismatch-envelope_fail]
             test_verify[[]DIGEST-dsse-mismatch-sig_fail]
 
