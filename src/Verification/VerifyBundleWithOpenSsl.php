@@ -15,6 +15,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -31,6 +32,7 @@ use function count;
 use function explode;
 use function extension_loaded;
 use function file_get_contents;
+use function hash;
 use function hash_equals;
 use function in_array;
 use function is_array;
@@ -100,6 +102,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
 
+            $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
+
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
@@ -167,6 +171,80 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 );
             }
         }
+    }
+
+    /**
+     * @link https://www.rfc-editor.org/rfc/rfc6962#section-2.1.1
+     * @link https://github.com/transparency-dev/merkle/blob/main/proof/verify.go
+     */
+    private function assertTransparencyLogEntriesHaveValidInclusionProof(int $bundleIndex, Bundle $bundle): void
+    {
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            $inclusionProof = $transparencyLogEntry->inclusionProof();
+            if ($inclusionProof === null) {
+                continue;
+            }
+
+            $index = $inclusionProof->logIndex();
+            $size  = $inclusionProof->treeSize();
+            $proof = $inclusionProof->hashes();
+
+            $inner  = $this->bitLength($index ^ $size - 1);
+            $border = $this->popCount($index >> $inner);
+
+            if (count($proof) !== $inner + $border) {
+                throw InvalidMerkleInclusionProof::forIndex($bundleIndex);
+            }
+
+            $seed = $this->merkleLeafHash($transparencyLogEntry->canonicalizedBody());
+            for ($i = 0; $i < $inner; $i++) {
+                if ((($index >> $i) & 1) === 0) {
+                    $seed = $this->merkleNodeHash($seed, $proof[$i]);
+                } else {
+                    $seed = $this->merkleNodeHash($proof[$i], $seed);
+                }
+            }
+
+            for ($i = $inner; $i < count($proof); $i++) {
+                $seed = $this->merkleNodeHash($proof[$i], $seed);
+            }
+
+            if (! hash_equals($inclusionProof->rootHash(), $seed)) {
+                throw InvalidMerkleInclusionProof::forIndex($bundleIndex);
+            }
+        }
+    }
+
+    private function merkleLeafHash(string $canonicalizedBody): string
+    {
+        return hash('sha256', "\x00" . $canonicalizedBody, true);
+    }
+
+    private function merkleNodeHash(string $left, string $right): string
+    {
+        return hash('sha256', "\x01" . $left . $right, true);
+    }
+
+    private function bitLength(int $n): int
+    {
+        $length = 0;
+        while ($n > 0) {
+            $n >>= 1;
+            $length++;
+        }
+
+        return $length;
+    }
+
+    private function popCount(int $n): int
+    {
+        $count = 0;
+        while ($n > 0) {
+            $count += $n & 1;
+            $n    >>= 1;
+        }
+
+        return $count;
     }
 
     private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void

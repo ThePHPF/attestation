@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMisma
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
@@ -44,6 +45,9 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
     private const UNTRUSTED_SA_CERTIFICATE_IDENTITY        = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
     private const UNKNOWN_VERSION_BUNDLE_FIXTURE           = __DIR__ . '/../../fixture/bundle-unknown-version-fail.json';
+    private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE   = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
+    private const INVALID_INCLUSION_PROOF_FIXTURE          = __DIR__ . '/../../fixture/invalid-inclusion-proof-fail.json';
+    private const INCORRECT_PUBLIC_KEY_FIXTURE             = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -184,6 +188,42 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(UnsupportedBundleMediaType::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(self::UNKNOWN_VERSION_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithACorruptedInclusionProofHash(): void
+    {
+        $this->expectException(InvalidMerkleInclusionProof::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAStaleInclusionProof(): void
+    {
+        $this->expectException(InvalidMerkleInclusionProof::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::INVALID_INCLUSION_PROOF_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAnIncorrectPublicKeyInTheLoggedEntry(): void
+    {
+        $this->expectException(InvalidMerkleInclusionProof::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::INCORRECT_PUBLIC_KEY_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],

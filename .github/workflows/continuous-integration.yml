@@ -135,8 +135,6 @@ jobs:
             test_verify[[]DIGEST-rekor2-checkpoint-origin-not-first]
             test_verify[[]DIGEST-rekor2-timestamp-with-embedded-cert]
 
-            test_verify[[]PATH-inclusion-proof-corrupted-hash_fail]
-            test_verify[[]PATH-invalid-inclusion-proof_fail]
             test_verify[[]PATH-checkpoint-wrong-roothash_fail]
             test_verify[[]PATH-invalid-checkpoint-signature_fail]
             test_verify[[]PATH-checkpoint-bad-keyhint_fail]
@@ -145,7 +143,6 @@ jobs:
             test_verify[[]PATH-wrong-hashedrekord-artifact_fail]
             test_verify[[]PATH-wrong-hashedrekord-entry_fail]
             test_verify[[]PATH-wrong-hashedrekord-cert-and-sig_fail]
-            test_verify[[]PATH-incorrect-public-key_fail]
             test_verify[[]PATH-dsse-mismatch-envelope_fail]
             test_verify[[]PATH-dsse-mismatch-sig_fail]
             test_verify[[]DIGEST-dsse-mismatch-envelope_fail]
