@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSigna
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -84,6 +85,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
              *  - https://docs.sigstore.dev/logging/verify-release/
              *  - https://github.com/secure-systems-lab/dsse/blob/master/protocol.md#protocol
              */
+            $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
+
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
@@ -98,6 +101,15 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate, $bundle->content);
             } else {
                 throw UnsupportedBundleContent::new();
+            }
+        }
+    }
+
+    private function assertTransparencyLogEntriesHaveValidLogIndex(int $bundleIndex, Bundle $bundle): void
+    {
+        foreach ($bundle->transparencyLogEntries as $transparencyLogEntry) {
+            if ($transparencyLogEntry->logIndex < 0) {
+                throw InvalidLogIndex::forIndex($bundleIndex, $transparencyLogEntry->logIndex);
             }
         }
     }

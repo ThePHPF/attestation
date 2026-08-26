@@ -140,7 +140,6 @@ jobs:
             test_verify[[]PATH-checkpoint-wrong-roothash_fail]
             test_verify[[]PATH-invalid-checkpoint-signature_fail]
             test_verify[[]PATH-checkpoint-bad-keyhint_fail]
-            test_verify[[]PATH-bundle-negative-log-index_fail]
             test_verify[[]PATH-set-invalid-signature_fail]
             test_verify[[]PATH-integrated-time-in-future_fail]
 

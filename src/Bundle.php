@@ -13,11 +13,15 @@ final class Bundle
 {
     public PemCertificate $certificate;
     public SigstoreBundleContent $content;
+    /** @var list<TransparencyLogEntry> */
+    public array $transparencyLogEntries;
 
-    private function __construct(PemCertificate $certificate, SigstoreBundleContent $content)
+    /** @param list<TransparencyLogEntry> $transparencyLogEntries */
+    private function __construct(PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries)
     {
-        $this->certificate = $certificate;
-        $this->content     = $content;
+        $this->certificate            = $certificate;
+        $this->content                = $content;
+        $this->transparencyLogEntries = $transparencyLogEntries;
     }
 
     /** @param array<array-key, mixed> $bundle */
@@ -29,7 +33,30 @@ final class Bundle
         return new self(
             self::certificateFromVerificationMaterial($bundle['verificationMaterial']),
             self::contentFromBundle($bundle),
+            self::transparencyLogEntriesFromVerificationMaterial($bundle['verificationMaterial']),
         );
+    }
+
+    /**
+     * @param array<array-key, mixed> $verificationMaterial
+     *
+     * @return list<TransparencyLogEntry>
+     */
+    private static function transparencyLogEntriesFromVerificationMaterial(array $verificationMaterial): array
+    {
+        if (! array_key_exists('tlogEntries', $verificationMaterial)) {
+            return [];
+        }
+
+        Assert::isArray($verificationMaterial['tlogEntries']);
+
+        $transparencyLogEntries = [];
+        foreach ($verificationMaterial['tlogEntries'] as $transparencyLogEntry) {
+            Assert::isArray($transparencyLogEntry);
+            $transparencyLogEntries[] = TransparencyLogEntry::fromBundleTransparencyLogEntry($transparencyLogEntry);
+        }
+
+        return $transparencyLogEntries;
     }
 
     /** @param array<array-key, mixed> $bundle */

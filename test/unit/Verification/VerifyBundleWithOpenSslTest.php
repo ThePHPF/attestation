@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
@@ -37,6 +38,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT             = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST      = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
+    private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE      = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -142,6 +144,18 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->verifier->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithANegativeLogIndex(): void
+    {
+        $this->expectException(InvalidLogIndex::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
