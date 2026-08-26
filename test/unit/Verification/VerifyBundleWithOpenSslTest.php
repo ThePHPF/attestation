@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -31,14 +32,16 @@ use function substr;
 /** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
 class VerifyBundleWithOpenSslTest extends TestCase
 {
-    private const BUNDLE_FIXTURE                         = __DIR__ . '/../../fixture/bundle.json';
-    private const PIE_PHAR                               = __DIR__ . '/../../fixture/pie.phar';
-    private const CERTIFICATE_IDENTITY                   = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
-    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/message-signature-bundle.json';
-    private const MESSAGE_SIGNATURE_ARTIFACT             = __DIR__ . '/../../fixture/message-signature-artifact.txt';
-    private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST      = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
-    private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE      = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
+    private const BUNDLE_FIXTURE                           = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR                                 = __DIR__ . '/../../fixture/pie.phar';
+    private const CERTIFICATE_IDENTITY                     = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
+    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE         = __DIR__ . '/../../fixture/message-signature-bundle.json';
+    private const MESSAGE_SIGNATURE_ARTIFACT               = __DIR__ . '/../../fixture/message-signature-artifact.txt';
+    private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST        = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
+    private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY   = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
+    private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE        = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
+    private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
+    private const UNTRUSTED_SA_CERTIFICATE_IDENTITY        = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -159,6 +162,18 @@ class VerifyBundleWithOpenSslTest extends TestCase
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAnIntegratedTimeOutsideCertificateValidity(): void
+    {
+        $this->expectException(InvalidIntegratedTime::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::UNTRUSTED_SA_CERTIFICATE_IDENTITY,
         );
     }
 

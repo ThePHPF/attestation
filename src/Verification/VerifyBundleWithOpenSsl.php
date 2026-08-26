@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSigna
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
@@ -87,6 +88,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
              */
             $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
 
+            $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
+
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
@@ -110,6 +113,41 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         foreach ($bundle->transparencyLogEntries as $transparencyLogEntry) {
             if ($transparencyLogEntry->logIndex < 0) {
                 throw InvalidLogIndex::forIndex($bundleIndex, $transparencyLogEntry->logIndex);
+            }
+        }
+    }
+
+    private function assertTransparencyLogEntriesAreWithinCertificateValidity(int $bundleIndex, Bundle $bundle): void
+    {
+        if ($bundle->transparencyLogEntries === []) {
+            return;
+        }
+
+        $certificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        Assert::isArray($certificateInfo);
+        Assert::keyExists($certificateInfo, 'validFrom_time_t');
+        Assert::integer($certificateInfo['validFrom_time_t']);
+        Assert::keyExists($certificateInfo, 'validTo_time_t');
+        Assert::integer($certificateInfo['validTo_time_t']);
+
+        $certificateValidFrom = $certificateInfo['validFrom_time_t'];
+        $certificateValidTo   = $certificateInfo['validTo_time_t'];
+
+        foreach ($bundle->transparencyLogEntries as $transparencyLogEntry) {
+            if ($transparencyLogEntry->integratedTime === null) {
+                continue;
+            }
+
+            if (
+                $transparencyLogEntry->integratedTime < $certificateValidFrom
+                || $transparencyLogEntry->integratedTime > $certificateValidTo
+            ) {
+                throw InvalidIntegratedTime::forIndex(
+                    $bundleIndex,
+                    $transparencyLogEntry->integratedTime,
+                    $certificateValidFrom,
+                    $certificateValidTo,
+                );
             }
         }
     }
