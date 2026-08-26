@@ -14,11 +14,11 @@ use function strlen;
 final class DsseEnvelope implements SigstoreBundleContent
 {
     /** @var non-empty-string */
-    public string $payload;
+    private string $payload;
     /** @var non-empty-string */
-    public string $payloadType;
+    private string $payloadType;
     /** @var non-empty-string */
-    public string $signature;
+    private string $signature;
 
     /**
      * @param non-empty-string $payload
@@ -75,5 +75,23 @@ final class DsseEnvelope implements SigstoreBundleContent
             strlen($this->payload),
             $this->payload,
         );
+    }
+
+    /** @return non-empty-string */
+    public function payload(): string
+    {
+        return $this->payload;
+    }
+
+    /** @return non-empty-string */
+    public function payloadType(): string
+    {
+        return $this->payloadType;
+    }
+
+    /** @return non-empty-string */
+    public function signature(): string
+    {
+        return $this->signature;
     }
 }

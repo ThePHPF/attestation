@@ -106,12 +106,12 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $this->assertCertificateIdentity($bundle, $expectedCertificateIdentity);
 
-            if ($bundle->content instanceof DsseEnvelope) {
-                $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle->content);
-                $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle->certificate, $bundle->content);
-            } elseif ($bundle->content instanceof MessageSignature) {
-                $this->assertDigestFromMessageSignatureMatchesActual($file, $bundle->content);
-                $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate, $bundle->content);
+            if ($bundle->content() instanceof DsseEnvelope) {
+                $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle->content());
+                $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle->certificate(), $bundle->content());
+            } elseif ($bundle->content() instanceof MessageSignature) {
+                $this->assertDigestFromMessageSignatureMatchesActual($file, $bundle->content());
+                $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
             }
@@ -120,27 +120,27 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
     private function assertBundleMediaTypeIsSupported(Bundle $bundle): void
     {
-        if (! in_array($bundle->mediaType, self::SUPPORTED_BUNDLE_MEDIA_TYPES, true)) {
-            throw UnsupportedBundleMediaType::fromMediaType($bundle->mediaType);
+        if (! in_array($bundle->mediaType(), self::SUPPORTED_BUNDLE_MEDIA_TYPES, true)) {
+            throw UnsupportedBundleMediaType::fromMediaType($bundle->mediaType());
         }
     }
 
     private function assertTransparencyLogEntriesHaveValidLogIndex(int $bundleIndex, Bundle $bundle): void
     {
-        foreach ($bundle->transparencyLogEntries as $transparencyLogEntry) {
-            if ($transparencyLogEntry->logIndex < 0) {
-                throw InvalidLogIndex::forIndex($bundleIndex, $transparencyLogEntry->logIndex);
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            if ($transparencyLogEntry->logIndex() < 0) {
+                throw InvalidLogIndex::forIndex($bundleIndex, $transparencyLogEntry->logIndex());
             }
         }
     }
 
     private function assertTransparencyLogEntriesAreWithinCertificateValidity(int $bundleIndex, Bundle $bundle): void
     {
-        if ($bundle->transparencyLogEntries === []) {
+        if ($bundle->transparencyLogEntries() === []) {
             return;
         }
 
-        $certificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        $certificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
         Assert::isArray($certificateInfo);
         Assert::keyExists($certificateInfo, 'validFrom_time_t');
         Assert::integer($certificateInfo['validFrom_time_t']);
@@ -150,18 +150,18 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $certificateValidFrom = $certificateInfo['validFrom_time_t'];
         $certificateValidTo   = $certificateInfo['validTo_time_t'];
 
-        foreach ($bundle->transparencyLogEntries as $transparencyLogEntry) {
-            if ($transparencyLogEntry->integratedTime === null) {
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            if ($transparencyLogEntry->integratedTime() === null) {
                 continue;
             }
 
             if (
-                $transparencyLogEntry->integratedTime < $certificateValidFrom
-                || $transparencyLogEntry->integratedTime > $certificateValidTo
+                $transparencyLogEntry->integratedTime() < $certificateValidFrom
+                || $transparencyLogEntry->integratedTime() > $certificateValidTo
             ) {
                 throw InvalidIntegratedTime::forIndex(
                     $bundleIndex,
-                    $transparencyLogEntry->integratedTime,
+                    $transparencyLogEntry->integratedTime(),
                     $certificateValidFrom,
                     $certificateValidTo,
                 );
@@ -171,7 +171,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
     private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'issuer');
         if (is_array($attestationCertificateInfo['issuer'])) {
@@ -247,7 +247,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     }
 
                     // Finally, verify that the located CA cert was used to sign the attestation certificate
-                    if (openssl_x509_verify($bundle->certificate->decoratedCertificate(), $caCertificateString) !== 1) {
+                    if (openssl_x509_verify($bundle->certificate()->decoratedCertificate(), $caCertificateString) !== 1) {
                         /** @psalm-suppress MixedArgument */
                         throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
                     }
@@ -269,7 +269,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @param array<non-empty-string, string> $extensions */
     private function assertCertificateExtensionClaims(Bundle $bundle, array $extensions): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'extensions');
         Assert::isArray($attestationCertificateInfo['extensions']);
@@ -311,7 +311,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
     private function assertCertificateIdentity(Bundle $bundle, string $expectedCertificateIdentity): void
     {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
+        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
         Assert::isArray($attestationCertificateInfo);
         Assert::keyExists($attestationCertificateInfo, 'extensions');
         Assert::isArray($attestationCertificateInfo['extensions']);
@@ -346,7 +346,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         if (
             openssl_verify(
                 $envelope->preAuthenticationEncoding(),
-                $envelope->signature,
+                $envelope->signature(),
                 $publicKey,
                 OPENSSL_ALGO_SHA256,
             ) !== 1
@@ -378,7 +378,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         if (
             openssl_verify(
                 $artifactContents,
-                $content->signature,
+                $content->signature(),
                 $publicKey,
                 OPENSSL_ALGO_SHA256,
             ) !== 1
@@ -390,7 +390,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     private function assertDigestFromMessageSignatureMatchesActual(FilenameWithChecksum $file, MessageSignature $content): void
     {
         $expected = $file->checksum();
-        $actual   = $content->digestHex;
+        $actual   = $content->digestHex();
         if (! hash_equals($expected, $actual)) {
             throw DigestMismatch::fromChecksumMismatch($expected, $actual);
         }
@@ -400,7 +400,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, ?string $expectedSubjectName, DsseEnvelope $envelope): void
     {
         /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($envelope->payload, true);
+        $decodedPayload = json_decode($envelope->payload(), true);
 
         if (
             ! is_array($decodedPayload)

@@ -12,11 +12,11 @@ use function array_key_exists;
 final class Bundle
 {
     /** @var non-empty-string */
-    public string $mediaType;
-    public PemCertificate $certificate;
-    public SigstoreBundleContent $content;
+    private string $mediaType;
+    private PemCertificate $certificate;
+    private SigstoreBundleContent $content;
     /** @var list<TransparencyLogEntry> */
-    public array $transparencyLogEntries;
+    private array $transparencyLogEntries;
 
     /**
      * @param non-empty-string           $mediaType
@@ -44,6 +44,28 @@ final class Bundle
             self::contentFromBundle($bundle),
             self::transparencyLogEntriesFromVerificationMaterial($bundle['verificationMaterial']),
         );
+    }
+
+    /** @return non-empty-string */
+    public function mediaType(): string
+    {
+        return $this->mediaType;
+    }
+
+    public function certificate(): PemCertificate
+    {
+        return $this->certificate;
+    }
+
+    public function content(): SigstoreBundleContent
+    {
+        return $this->content;
+    }
+
+    /** @return list<TransparencyLogEntry> */
+    public function transparencyLogEntries(): array
+    {
+        return $this->transparencyLogEntries;
     }
 
     /**

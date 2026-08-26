@@ -25,15 +25,15 @@ final class InclusionProofTest extends TestCase
             'checkpoint' => ['envelope' => "rekor.sigstore.dev - 1193050959916656506\n339175655\nAhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=\n\n— rekor.sigstore.dev wNI9ajBGAiEAhEsbDtU0G6tkfpxcTPi5Q0Tsi/Z85DBcGst+iLS6NncCIQDPlvrm+OVQyT31gOp90Mh74np6cFEryT2ybYVWq7CNRw==\n"],
         ]);
 
-        self::assertSame(339175637, $inclusionProof->logIndex);
-        self::assertSame(base64_decode('AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4='), $inclusionProof->rootHash);
-        self::assertSame(339175655, $inclusionProof->treeSize);
-        self::assertCount(2, $inclusionProof->hashes);
-        self::assertSame(base64_decode('+cZUU5T9fPeBM0sh9Tr6pkevLIqAm2g7wQjSeibo4Vg='), $inclusionProof->hashes[0]);
-        self::assertSame(base64_decode('h7VJtejEapYJ0lVmwmrZd8GFeWKSibdiJmP+aLD8/kc='), $inclusionProof->hashes[1]);
+        self::assertSame(339175637, $inclusionProof->logIndex());
+        self::assertSame(base64_decode('AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4='), $inclusionProof->rootHash());
+        self::assertSame(339175655, $inclusionProof->treeSize());
+        self::assertCount(2, $inclusionProof->hashes());
+        self::assertSame(base64_decode('+cZUU5T9fPeBM0sh9Tr6pkevLIqAm2g7wQjSeibo4Vg='), $inclusionProof->hashes()[0]);
+        self::assertSame(base64_decode('h7VJtejEapYJ0lVmwmrZd8GFeWKSibdiJmP+aLD8/kc='), $inclusionProof->hashes()[1]);
         self::assertSame(
             "rekor.sigstore.dev - 1193050959916656506\n339175655\nAhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=\n\n— rekor.sigstore.dev wNI9ajBGAiEAhEsbDtU0G6tkfpxcTPi5Q0Tsi/Z85DBcGst+iLS6NncCIQDPlvrm+OVQyT31gOp90Mh74np6cFEryT2ybYVWq7CNRw==\n",
-            $inclusionProof->checkpointEnvelope,
+            $inclusionProof->checkpointEnvelope(),
         );
     }
 
@@ -46,7 +46,7 @@ final class InclusionProofTest extends TestCase
             'hashes' => [],
         ]);
 
-        self::assertNull($inclusionProof->checkpointEnvelope);
-        self::assertSame([], $inclusionProof->hashes);
+        self::assertNull($inclusionProof->checkpointEnvelope());
+        self::assertSame([], $inclusionProof->hashes());
     }
 }

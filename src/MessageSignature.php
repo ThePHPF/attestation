@@ -17,9 +17,9 @@ final class MessageSignature implements SigstoreBundleContent
     private const SUPPORTED_DIGEST_ALGORITHM = 'SHA2_256';
 
     /** @var non-empty-string */
-    public string $digestHex;
+    private string $digestHex;
     /** @var non-empty-string */
-    public string $signature;
+    private string $signature;
 
     /**
      * @param non-empty-string $digestHex
@@ -55,5 +55,17 @@ final class MessageSignature implements SigstoreBundleContent
         Assert::stringNotEmpty($decodedSignature);
 
         return new self(bin2hex($decodedDigest), $decodedSignature);
+    }
+
+    /** @return non-empty-string */
+    public function digestHex(): string
+    {
+        return $this->digestHex;
+    }
+
+    /** @return non-empty-string */
+    public function signature(): string
+    {
+        return $this->signature;
     }
 }

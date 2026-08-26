@@ -25,11 +25,11 @@ final class MessageSignatureTest extends TestCase
 
         self::assertSame(
             'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf',
-            $messageSignature->digestHex,
+            $messageSignature->digestHex(),
         );
         self::assertSame(
             base64_decode('MEQCIFOpaXKWvvBDwThDjTHX7tFF8liRoSxLZIsSeoUM/6D4AiBxV9/RnTMMw1t6nniX0rCuwrf8Vh+feLFu99m4ir+3yA=='),
-            $messageSignature->signature,
+            $messageSignature->signature(),
         );
     }
 

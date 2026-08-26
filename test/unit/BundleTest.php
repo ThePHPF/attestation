@@ -31,9 +31,9 @@ final class BundleTest extends TestCase
 
         $bundle = Bundle::fromBundle($decoded);
 
-        self::assertNotSame('', $bundle->certificate->decoratedCertificate());
-        self::assertInstanceOf(DsseEnvelope::class, $bundle->content);
-        self::assertNotSame('', $bundle->content->payload);
+        self::assertNotSame('', $bundle->certificate()->decoratedCertificate());
+        self::assertInstanceOf(DsseEnvelope::class, $bundle->content());
+        self::assertNotSame('', $bundle->content()->payload());
     }
 
     public function testFromBundleWithACertificateChainUsesTheLeafCertificate(): void
@@ -59,8 +59,8 @@ final class BundleTest extends TestCase
         $expectedLeaf      = PemCertificate::fromBase64EncodedDerBytes($chainCertificates[0]['rawBytes']);
         $unexpectedNonLeaf = PemCertificate::fromBase64EncodedDerBytes($chainCertificates[1]['rawBytes']);
 
-        self::assertSame($expectedLeaf->decoratedCertificate(), $bundle->certificate->decoratedCertificate());
-        self::assertNotSame($unexpectedNonLeaf->decoratedCertificate(), $bundle->certificate->decoratedCertificate());
+        self::assertSame($expectedLeaf->decoratedCertificate(), $bundle->certificate()->decoratedCertificate());
+        self::assertNotSame($unexpectedNonLeaf->decoratedCertificate(), $bundle->certificate()->decoratedCertificate());
     }
 
     public function testFromBundleWithMessageSignature(): void
@@ -73,9 +73,9 @@ final class BundleTest extends TestCase
 
         $bundle = Bundle::fromBundle($decoded);
 
-        self::assertNotSame('', $bundle->certificate->decoratedCertificate());
-        self::assertInstanceOf(MessageSignature::class, $bundle->content);
-        self::assertNotSame('', $bundle->content->digestHex);
-        self::assertNotSame('', $bundle->content->signature);
+        self::assertNotSame('', $bundle->certificate()->decoratedCertificate());
+        self::assertInstanceOf(MessageSignature::class, $bundle->content());
+        self::assertNotSame('', $bundle->content()->digestHex());
+        self::assertNotSame('', $bundle->content()->signature());
     }
 }

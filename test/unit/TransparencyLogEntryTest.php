@@ -35,17 +35,17 @@ final class TransparencyLogEntryTest extends TestCase
             'canonicalizedBody' => 'eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ==',
         ]);
 
-        self::assertSame(461079899, $transparencyLogEntry->logIndex);
-        self::assertSame(1756846563, $transparencyLogEntry->integratedTime);
-        self::assertSame('dsse', $transparencyLogEntry->kind);
-        self::assertSame(base64_decode('wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0='), $transparencyLogEntry->logId);
-        self::assertSame(base64_decode('eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ=='), $transparencyLogEntry->canonicalizedBody);
+        self::assertSame(461079899, $transparencyLogEntry->logIndex());
+        self::assertSame(1756846563, $transparencyLogEntry->integratedTime());
+        self::assertSame('dsse', $transparencyLogEntry->kind());
+        self::assertSame(base64_decode('wNI9atQGlz+VWfO6LRygH4QUfY/8W4RFwiT5i5WRgB0='), $transparencyLogEntry->logId());
+        self::assertSame(base64_decode('eyJhcGlWZXJzaW9uIjoiMC4wLjEifQ=='), $transparencyLogEntry->canonicalizedBody());
         self::assertSame(
             base64_decode('MEQCIGpzZ0f+u9PWHz14hQpE8ZE2TT6TDqlIVNN6JKCRRALLAiAmqBkeImJEJLHrUfLsvwBRjaVngZcjvji/d6+VUnkRZQ=='),
-            $transparencyLogEntry->signedEntryTimestamp,
+            $transparencyLogEntry->signedEntryTimestamp(),
         );
-        self::assertInstanceOf(InclusionProof::class, $transparencyLogEntry->inclusionProof);
-        self::assertSame(339175637, $transparencyLogEntry->inclusionProof->logIndex);
+        self::assertInstanceOf(InclusionProof::class, $transparencyLogEntry->inclusionProof());
+        self::assertSame(339175637, $transparencyLogEntry->inclusionProof()->logIndex());
     }
 
     public function testFromBundleTransparencyLogEntryWithoutInclusionProof(): void
@@ -64,6 +64,6 @@ final class TransparencyLogEntryTest extends TestCase
             $decoded['verificationMaterial']['tlogEntries'][0],
         );
 
-        self::assertNull($transparencyLogEntry->inclusionProof);
+        self::assertNull($transparencyLogEntry->inclusionProof());
     }
 }

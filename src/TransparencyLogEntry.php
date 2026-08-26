@@ -13,14 +13,14 @@ use function base64_decode;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class TransparencyLogEntry
 {
-    public int $logIndex;
-    public ?int $integratedTime;
+    private int $logIndex;
+    private ?int $integratedTime;
     /** @var 'hashedrekord'|'dsse'|'intoto' */
-    public string $kind;
-    public string $logId;
-    public string $canonicalizedBody;
-    public ?string $signedEntryTimestamp;
-    public ?InclusionProof $inclusionProof;
+    private string $kind;
+    private string $logId;
+    private string $canonicalizedBody;
+    private ?string $signedEntryTimestamp;
+    private ?InclusionProof $inclusionProof;
 
     /** @param 'hashedrekord'|'dsse'|'intoto' $kind */
     private function __construct(
@@ -101,5 +101,41 @@ final class TransparencyLogEntry
             $signedEntryTimestamp,
             $inclusionProof,
         );
+    }
+
+    public function logIndex(): int
+    {
+        return $this->logIndex;
+    }
+
+    public function integratedTime(): ?int
+    {
+        return $this->integratedTime;
+    }
+
+    /** @return 'hashedrekord'|'dsse'|'intoto' */
+    public function kind(): string
+    {
+        return $this->kind;
+    }
+
+    public function logId(): string
+    {
+        return $this->logId;
+    }
+
+    public function canonicalizedBody(): string
+    {
+        return $this->canonicalizedBody;
+    }
+
+    public function signedEntryTimestamp(): ?string
+    {
+        return $this->signedEntryTimestamp;
+    }
+
+    public function inclusionProof(): ?InclusionProof
+    {
+        return $this->inclusionProof;
     }
 }
