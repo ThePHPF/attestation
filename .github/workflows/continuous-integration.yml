@@ -95,3 +95,84 @@ jobs:
             --bundle=test/fixture/bundle.json \
             --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
             test/fixture/pie.phar
+
+  sigstore-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.4
+          extensions: intl, sodium, zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v7
+      - uses: ramsey/composer-install@v4
+      - uses: sigstore/sigstore-conformance@21533cde107c734ebc153c3e3a24d75fc9811a36 # v0.0.29
+        with:
+          entrypoint: ${{ github.workspace }}/bin/cli.php
+          skip-signing: "true"
+          skip-result-upload: "true" # we can enable this when closer to completion
+          xfail: |
+            test_verify[[]PATH-rekor2-timestamp-without-embedded-cert]
+            test_verify[[]PATH-rekor2-checkpoint-two-sigs-cosigned]
+            test_verify[[]PATH-rekor2-timestamp-with-expired-cert-chain]
+            test_verify[[]PATH-rekor2-dsse-happy-path]
+            test_verify[[]PATH-rekor2-checkpoint-multiple-cosigs]
+            test_verify[[]PATH-rekor2-happy-path]
+            test_verify[[]PATH-rekor2-checkpoint-cosigned]
+            test_verify[[]PATH-rekor2-checkpoint-two-sigs-from-origin]
+            test_verify[[]PATH-rekor2-checkpoint-origin-not-first]
+            test_verify[[]PATH-rekor2-timestamp-with-embedded-cert]
+            test_verify[[]DIGEST-rekor2-timestamp-without-embedded-cert]
+            test_verify[[]DIGEST-rekor2-checkpoint-two-sigs-cosigned]
+            test_verify[[]DIGEST-rekor2-timestamp-with-expired-cert-chain]
+            test_verify[[]DIGEST-rekor2-dsse-happy-path]
+            test_verify[[]DIGEST-rekor2-checkpoint-multiple-cosigs]
+            test_verify[[]DIGEST-rekor2-happy-path]
+            test_verify[[]DIGEST-rekor2-checkpoint-cosigned]
+            test_verify[[]DIGEST-rekor2-checkpoint-two-sigs-from-origin]
+            test_verify[[]DIGEST-rekor2-checkpoint-origin-not-first]
+            test_verify[[]DIGEST-rekor2-timestamp-with-embedded-cert]
+
+            test_verify[[]PATH-inclusion-proof-corrupted-hash_fail]
+            test_verify[[]PATH-invalid-inclusion-proof_fail]
+            test_verify[[]PATH-checkpoint-wrong-roothash_fail]
+            test_verify[[]PATH-invalid-checkpoint-signature_fail]
+            test_verify[[]PATH-checkpoint-bad-keyhint_fail]
+            test_verify[[]PATH-bundle-negative-log-index_fail]
+            test_verify[[]PATH-set-invalid-signature_fail]
+            test_verify[[]PATH-integrated-time-in-future_fail]
+
+            test_verify[[]PATH-wrong-hashedrekord-artifact_fail]
+            test_verify[[]PATH-wrong-hashedrekord-entry_fail]
+            test_verify[[]PATH-wrong-hashedrekord-cert-and-sig_fail]
+            test_verify[[]PATH-incorrect-public-key_fail]
+            test_verify[[]PATH-dsse-mismatch-envelope_fail]
+            test_verify[[]PATH-dsse-mismatch-sig_fail]
+            test_verify[[]PATH-bundle-unknown-version_fail]
+            test_verify[[]DIGEST-dsse-mismatch-envelope_fail]
+            test_verify[[]DIGEST-dsse-mismatch-sig_fail]
+
+            test_verify[[]PATH-trust-root-tsa-validity-end-inclusive]
+            test_verify[[]PATH-trust-root-tlog-validity-end-inclusive]
+            test_verify[[]DIGEST-trust-root-tsa-validity-end-inclusive]
+            test_verify[[]DIGEST-trust-root-tlog-validity-end-inclusive]
+
+            test_verify[[]DIGEST-intoto-expired-certificate_fail]
+            test_verify[[]DIGEST-intoto-log-entry-mismatch_fail]
+            test_verify[[]DIGEST-intoto-set-outside-signing-cert-validity_fail]
+            test_verify[[]DIGEST-intoto-tsa-timestamp-outside-cert-validity_fail]
+            test_verify[[]DIGEST-intoto-missing-inclusion-proof_fail]
+            test_verify[[]PATH-intoto-with-custom-trust-root]
+
+            test_verify[[]PATH-managed-key-happy-path]
+            test_verify[[]PATH-managed-key-and-trusted-root]
+            test_verify[[]DIGEST-managed-key-happy-path]
+            test_verify[[]DIGEST-managed-key-and-trusted-root]
+
+            test_verify[[]DIGEST-happy-path-v0.1]
+            test_verify[[]DIGEST-happy-path-v0.2]
+            test_verify[[]DIGEST-happy-path-v0.3]
+            test_verify[[]DIGEST-happy-path-v0.3-new-mediaType]
+            test_verify[[]DIGEST-bundle-with-sct-with-extensions]
