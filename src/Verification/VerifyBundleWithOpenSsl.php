@@ -12,7 +12,10 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
@@ -31,6 +34,8 @@ use Webmozart\Assert\Assert;
 
 use function array_key_exists;
 use function array_map;
+use function array_search;
+use function array_slice;
 use function base64_decode;
 use function bin2hex;
 use function count;
@@ -39,6 +44,7 @@ use function extension_loaded;
 use function file_get_contents;
 use function hash;
 use function hash_equals;
+use function implode;
 use function in_array;
 use function is_array;
 use function is_readable;
@@ -110,6 +116,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
+
+            $this->assertTransparencyLogEntriesHaveValidCheckpoints($bundleIndex, $bundle);
 
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
@@ -252,6 +260,83 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
 
         return $count;
+    }
+
+    /**
+     * @link https://github.com/sigstore/rekor/blob/main/pkg/util/checkpoint.go
+     * @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go
+     */
+    private function assertTransparencyLogEntriesHaveValidCheckpoints(int $bundleIndex, Bundle $bundle): void
+    {
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            $inclusionProof = $transparencyLogEntry->inclusionProof();
+            if ($inclusionProof === null) {
+                continue;
+            }
+
+            $checkpointEnvelope = $inclusionProof->checkpointEnvelope();
+            if ($checkpointEnvelope === null) {
+                continue;
+            }
+
+            $parsedCheckpoint = $this->parseCheckpointEnvelope($bundleIndex, $checkpointEnvelope);
+
+            $transparencyLogKey = $this->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
+
+            if (! hash_equals(substr($transparencyLogKey['keyId'], 0, 4), $parsedCheckpoint['keyHint'])) {
+                throw CheckpointKeyHintMismatch::forIndex($bundleIndex);
+            }
+
+            $publicKey = openssl_pkey_get_public($transparencyLogKey['publicKey']->decoratedPublicKey());
+            Assert::notFalse($publicKey);
+
+            if (
+                openssl_verify(
+                    $parsedCheckpoint['noteText'],
+                    $parsedCheckpoint['signature'],
+                    $publicKey,
+                    OPENSSL_ALGO_SHA256,
+                ) !== 1
+            ) {
+                throw CheckpointSignatureVerificationFailed::forIndex($bundleIndex);
+            }
+        }
+    }
+
+    /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string} */
+    private function parseCheckpointEnvelope(int $bundleIndex, string $envelope): array
+    {
+        $lines          = explode("\n", $envelope);
+        $blankLineIndex = array_search('', $lines, true);
+
+        if (
+            $blankLineIndex === false
+            || ! isset($lines[$blankLineIndex + 1])
+            || $lines[$blankLineIndex + 1] === ''
+        ) {
+            throw InvalidCheckpointFormat::forIndex($bundleIndex);
+        }
+
+        $noteText = implode("\n", array_slice($lines, 0, $blankLineIndex)) . "\n";
+
+        $signatureLineParts = explode(' ', $lines[$blankLineIndex + 1], 3);
+        if (count($signatureLineParts) !== 3) {
+            throw InvalidCheckpointFormat::forIndex($bundleIndex);
+        }
+
+        $signatureBlob = base64_decode($signatureLineParts[2]);
+        if ($signatureBlob === '' || strlen($signatureBlob) <= 4) {
+            throw InvalidCheckpointFormat::forIndex($bundleIndex);
+        }
+
+        $signature = substr($signatureBlob, 4);
+        Assert::stringNotEmpty($signature);
+
+        return [
+            'noteText' => $noteText,
+            'keyHint' => substr($signatureBlob, 0, 4),
+            'signature' => $signature,
+        ];
     }
 
     private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void

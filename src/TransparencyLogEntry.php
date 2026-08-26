@@ -17,12 +17,16 @@ final class TransparencyLogEntry
     private ?int $integratedTime;
     /** @var 'hashedrekord'|'dsse'|'intoto' */
     private string $kind;
+    /** @var non-empty-string */
     private string $logId;
     private string $canonicalizedBody;
     private ?string $signedEntryTimestamp;
     private ?InclusionProof $inclusionProof;
 
-    /** @param 'hashedrekord'|'dsse'|'intoto' $kind */
+    /**
+     * @param 'hashedrekord'|'dsse'|'intoto' $kind
+     * @param non-empty-string               $logId
+     */
     private function __construct(
         int $logIndex,
         ?int $integratedTime,
@@ -119,6 +123,7 @@ final class TransparencyLogEntry
         return $this->kind;
     }
 
+    /** @return non-empty-string */
     public function logId(): string
     {
         return $this->logId;

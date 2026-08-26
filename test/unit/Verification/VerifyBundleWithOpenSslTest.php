@@ -10,6 +10,8 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
@@ -48,6 +50,8 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE   = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
     private const INVALID_INCLUSION_PROOF_FIXTURE          = __DIR__ . '/../../fixture/invalid-inclusion-proof-fail.json';
     private const INCORRECT_PUBLIC_KEY_FIXTURE             = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
+    private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE     = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
+    private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -224,6 +228,30 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(InvalidMerkleInclusionProof::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(self::INCORRECT_PUBLIC_KEY_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAnInvalidCheckpointSignature(): void
+    {
+        $this->expectException(CheckpointSignatureVerificationFailed::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::INVALID_CHECKPOINT_SIGNATURE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithACheckpointSignatureKeyHintMismatch(): void
+    {
+        $this->expectException(CheckpointKeyHintMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::CHECKPOINT_BAD_KEYHINT_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
