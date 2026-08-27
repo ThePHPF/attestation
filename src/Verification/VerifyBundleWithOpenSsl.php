@@ -10,6 +10,7 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
+use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
@@ -29,6 +30,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
@@ -60,6 +62,7 @@ use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
 use function sodium_crypto_sign_verify_detached;
+use function str_replace;
 use function strlen;
 use function substr;
 use function trim;
@@ -88,6 +91,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
     private const ED25519_SPKI_DER_PREFIX_LENGTH = 12;
     private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
+
+    private const HASHEDREKORD_VERSION_0_0_2 = '0.0.2';
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -135,6 +140,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             $this->assertTransparencyLogEntriesHaveValidCheckpoints($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidSignedEntryTimestamps($bundleIndex, $bundle);
+
+            $this->assertTransparencyLogEntriesMatchBundleContent($bundleIndex, $bundle, $file);
 
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
@@ -347,6 +354,122 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 throw SignedEntryTimestampVerificationFailed::forIndex($bundleIndex);
             }
         }
+    }
+
+    private function assertTransparencyLogEntriesMatchBundleContent(int $bundleIndex, Bundle $bundle, FilenameWithChecksum $file): void
+    {
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            if ($transparencyLogEntry->kind() === 'hashedrekord' && $bundle->content() instanceof MessageSignature) {
+                $this->assertHashedRekordEntryMatchesBundleContent(
+                    $bundleIndex,
+                    $transparencyLogEntry,
+                    $file,
+                    $bundle->content(),
+                    $bundle->certificate(),
+                );
+            }
+        }
+    }
+
+    private function assertHashedRekordEntryMatchesBundleContent(
+        int $bundleIndex,
+        TransparencyLogEntry $transparencyLogEntry,
+        FilenameWithChecksum $file,
+        MessageSignature $content,
+        PemCertificate $certificate
+    ): void {
+        /** @var array<array-key, mixed> $body */
+        $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
+        Assert::isArray($body['spec']);
+
+        [$entryDigestHex, $entrySignatureContent, $entryCertificateDer] = $transparencyLogEntry->version() === self::HASHEDREKORD_VERSION_0_0_2
+            ? $this->parseHashedRekordV002Spec($body['spec'])
+            : $this->parseHashedRekordV001Spec($body['spec']);
+
+        if (! hash_equals($file->checksum(), $entryDigestHex)) {
+            throw DigestMismatch::fromChecksumMismatch($file->checksum(), $entryDigestHex);
+        }
+
+        $entrySignature = base64_decode($entrySignatureContent);
+        Assert::stringNotEmpty($entrySignature);
+
+        if (! hash_equals($content->signature(), $entrySignature)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'signature');
+        }
+
+        if (! hash_equals($certificate->derEncodedBytes(), $entryCertificateDer)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
+        }
+    }
+
+    /**
+     * @param array<array-key, mixed> $spec
+     *
+     * @return array{0: non-empty-string, 1: non-empty-string, 2: non-empty-string} [digestHex, base64-encoded signature, DER-encoded certificate]
+     */
+    private function parseHashedRekordV001Spec(array $spec): array
+    {
+        Assert::isArray($spec['data']);
+        Assert::isArray($spec['data']['hash']);
+        Assert::stringNotEmpty($spec['data']['hash']['value']);
+
+        Assert::isArray($spec['signature']);
+        Assert::stringNotEmpty($spec['signature']['content']);
+
+        Assert::isArray($spec['signature']['publicKey']);
+        Assert::stringNotEmpty($spec['signature']['publicKey']['content']);
+        $certificatePem = base64_decode($spec['signature']['publicKey']['content']);
+        Assert::stringNotEmpty($certificatePem);
+
+        return [
+            $spec['data']['hash']['value'],
+            $spec['signature']['content'],
+            $this->derFromPem($certificatePem),
+        ];
+    }
+
+    /**
+     * @param array<array-key, mixed> $spec
+     *
+     * @return array{0: non-empty-string, 1: non-empty-string, 2: non-empty-string} [digestHex, base64-encoded signature, DER-encoded certificate]
+     */
+    private function parseHashedRekordV002Spec(array $spec): array
+    {
+        Assert::isArray($spec['hashedRekordV002']);
+        $v002Spec = $spec['hashedRekordV002'];
+
+        Assert::isArray($v002Spec['data']);
+        Assert::stringNotEmpty($v002Spec['data']['digest']);
+        $digest = base64_decode($v002Spec['data']['digest']);
+        Assert::stringNotEmpty($digest);
+
+        Assert::isArray($v002Spec['signature']);
+        Assert::stringNotEmpty($v002Spec['signature']['content']);
+
+        Assert::isArray($v002Spec['signature']['verifier']);
+        Assert::isArray($v002Spec['signature']['verifier']['x509Certificate']);
+        Assert::stringNotEmpty($v002Spec['signature']['verifier']['x509Certificate']['rawBytes']);
+        $certificateDer = base64_decode($v002Spec['signature']['verifier']['x509Certificate']['rawBytes']);
+        Assert::stringNotEmpty($certificateDer);
+
+        return [
+            bin2hex($digest),
+            $v002Spec['signature']['content'],
+            $certificateDer,
+        ];
+    }
+
+    /** @return non-empty-string */
+    private function derFromPem(string $pem): string
+    {
+        $der = base64_decode(str_replace(
+            ['-----BEGIN CERTIFICATE-----', '-----END CERTIFICATE-----', "\r", "\n"],
+            '',
+            $pem,
+        ));
+        Assert::stringNotEmpty($der);
+
+        return $der;
     }
 
     /**

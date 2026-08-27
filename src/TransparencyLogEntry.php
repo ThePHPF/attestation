@@ -18,6 +18,8 @@ final class TransparencyLogEntry
     /** @var 'hashedrekord'|'dsse'|'intoto' */
     private string $kind;
     /** @var non-empty-string */
+    private string $version;
+    /** @var non-empty-string */
     private string $logId;
     private string $canonicalizedBody;
     /** @var non-empty-string|null */
@@ -26,6 +28,7 @@ final class TransparencyLogEntry
 
     /**
      * @param 'hashedrekord'|'dsse'|'intoto' $kind
+     * @param non-empty-string               $version
      * @param non-empty-string               $logId
      * @param non-empty-string|null          $signedEntryTimestamp
      */
@@ -33,6 +36,7 @@ final class TransparencyLogEntry
         int $logIndex,
         ?int $integratedTime,
         string $kind,
+        string $version,
         string $logId,
         string $canonicalizedBody,
         ?string $signedEntryTimestamp,
@@ -41,6 +45,7 @@ final class TransparencyLogEntry
         $this->logIndex             = $logIndex;
         $this->integratedTime       = $integratedTime;
         $this->kind                 = $kind;
+        $this->version              = $version;
         $this->logId                = $logId;
         $this->canonicalizedBody    = $canonicalizedBody;
         $this->signedEntryTimestamp = $signedEntryTimestamp;
@@ -69,6 +74,10 @@ final class TransparencyLogEntry
         if ($kind !== 'hashedrekord' && $kind !== 'dsse' && $kind !== 'intoto') {
             throw UnsupportedTransparencyLogEntryKind::fromKind($kind);
         }
+
+        Assert::keyExists($transparencyLogEntry['kindVersion'], 'version');
+        Assert::stringNotEmpty($transparencyLogEntry['kindVersion']['version']);
+        $version = $transparencyLogEntry['kindVersion']['version'];
 
         Assert::keyExists($transparencyLogEntry, 'logId');
         Assert::isArray($transparencyLogEntry['logId']);
@@ -102,6 +111,7 @@ final class TransparencyLogEntry
             (int) $transparencyLogEntry['logIndex'],
             $integratedTime,
             $kind,
+            $version,
             $logId,
             $canonicalizedBody,
             $signedEntryTimestamp,
@@ -123,6 +133,12 @@ final class TransparencyLogEntry
     public function kind(): string
     {
         return $this->kind;
+    }
+
+    /** @return non-empty-string */
+    public function version(): string
+    {
+        return $this->version;
     }
 
     /** @return non-empty-string */

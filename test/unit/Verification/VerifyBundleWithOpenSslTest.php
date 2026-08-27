@@ -22,6 +22,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValu
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
@@ -59,6 +60,9 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
     private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE        = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
     private const SET_INVALID_SIGNATURE_FIXTURE            = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
+    private const WRONG_HASHEDREKORD_ARTIFACT_FIXTURE      = __DIR__ . '/../../fixture/wrong-hashedrekord-artifact-fail.json';
+    private const WRONG_HASHEDREKORD_ENTRY_FIXTURE         = __DIR__ . '/../../fixture/wrong-hashedrekord-entry-fail.json';
+    private const WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE  = __DIR__ . '/../../fixture/wrong-hashedrekord-cert-and-sig-fail.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
@@ -217,7 +221,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testMessageSignatureVerificationFailedForTamperedSignature(): void
     {
-        $this->expectException(SignatureVerificationFailed::class);
+        $this->expectException(TransparencyLogEntryContentMismatch::class);
         $this->verifier->verify(
             $this->loadMessageSignatureFixtureBundleWithTamperedSignature(),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
@@ -352,6 +356,42 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(SignedEntryTimestampVerificationFailed::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(self::SET_INVALID_SIGNATURE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWhereTheHashedRekordEntryRecordsAWrongArtifactDigest(): void
+    {
+        $this->expectException(DigestMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::WRONG_HASHEDREKORD_ARTIFACT_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWhereTheHashedRekordEntryIsForACompletelyDifferentArtifact(): void
+    {
+        $this->expectException(DigestMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::WRONG_HASHEDREKORD_ENTRY_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWhereTheHashedRekordEntryRecordsAWrongCertificateAndSignature(): void
+    {
+        $this->expectException(TransparencyLogEntryContentMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
