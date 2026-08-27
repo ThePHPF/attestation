@@ -5,6 +5,7 @@
     "require": {
         "php": "^7.4||^8.0",
         "ext-json": "*",
+        "ext-sodium": "*",
         "composer/composer": "^2.2",
         "symfony/console": "^5.4 || ^6.0 || ^7.0 || ^8.0",
         "webmozart/assert": "^1.11 || ^2.0"
