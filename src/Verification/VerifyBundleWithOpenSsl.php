@@ -367,6 +367,13 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     $bundle->content(),
                     $bundle->certificate(),
                 );
+            } elseif ($transparencyLogEntry->kind() === 'dsse' && $bundle->content() instanceof DsseEnvelope) {
+                $this->assertDsseEntryMatchesBundleContent(
+                    $bundleIndex,
+                    $transparencyLogEntry,
+                    $bundle->content(),
+                    $bundle->certificate(),
+                );
             }
         }
     }
@@ -470,6 +477,42 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         Assert::stringNotEmpty($der);
 
         return $der;
+    }
+
+    private function assertDsseEntryMatchesBundleContent(
+        int $bundleIndex,
+        TransparencyLogEntry $transparencyLogEntry,
+        DsseEnvelope $content,
+        PemCertificate $certificate
+    ): void {
+        /** @var array<array-key, mixed> $body */
+        $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
+        Assert::isArray($body['spec']);
+        Assert::isArray($body['spec']['payloadHash']);
+        Assert::stringNotEmpty($body['spec']['payloadHash']['value']);
+
+        $actualPayloadHash = hash('sha256', $content->payload());
+        if (! hash_equals($actualPayloadHash, $body['spec']['payloadHash']['value'])) {
+            throw DigestMismatch::fromChecksumMismatch($actualPayloadHash, $body['spec']['payloadHash']['value']);
+        }
+
+        Assert::isArray($body['spec']['signatures']);
+        Assert::isArray($body['spec']['signatures'][0]);
+        Assert::stringNotEmpty($body['spec']['signatures'][0]['signature']);
+        $entrySignature = base64_decode($body['spec']['signatures'][0]['signature']);
+        Assert::stringNotEmpty($entrySignature);
+
+        if (! hash_equals($content->signature(), $entrySignature)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'signature');
+        }
+
+        Assert::stringNotEmpty($body['spec']['signatures'][0]['verifier']);
+        $entryCertificatePem = base64_decode($body['spec']['signatures'][0]['verifier']);
+        Assert::stringNotEmpty($entryCertificatePem);
+
+        if (! hash_equals($certificate->derEncodedBytes(), $this->derFromPem($entryCertificatePem))) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
+        }
     }
 
     /**

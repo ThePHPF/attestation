@@ -135,11 +135,6 @@ jobs:
             test_verify[[]DIGEST-rekor2-checkpoint-origin-not-first]
             test_verify[[]DIGEST-rekor2-timestamp-with-embedded-cert]
 
-            test_verify[[]PATH-dsse-mismatch-envelope_fail]
-            test_verify[[]PATH-dsse-mismatch-sig_fail]
-            test_verify[[]DIGEST-dsse-mismatch-envelope_fail]
-            test_verify[[]DIGEST-dsse-mismatch-sig_fail]
-
             test_verify[[]PATH-trust-root-tsa-validity-end-inclusive]
             test_verify[[]PATH-trust-root-tlog-validity-end-inclusive]
             test_verify[[]DIGEST-trust-root-tsa-validity-end-inclusive]
