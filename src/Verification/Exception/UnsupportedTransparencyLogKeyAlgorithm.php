@@ -11,7 +11,7 @@ class UnsupportedTransparencyLogKeyAlgorithm extends FailedToVerifyArtifact
     public static function fromKeyDetails(string $keyDetails): self
     {
         return new self(sprintf(
-            'Unsupported transparency log key algorithm "%s"; only PKIX_ECDSA_P256_SHA_256 is currently supported',
+            'Unsupported transparency log key algorithm "%s"; only PKIX_ECDSA_P256_SHA_256 and PKIX_ED25519 are currently supported',
             $keyDetails,
         ));
     }

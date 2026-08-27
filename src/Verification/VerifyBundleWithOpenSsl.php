@@ -55,6 +55,7 @@ use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
+use function sodium_crypto_sign_verify_detached;
 use function strlen;
 use function substr;
 use function trim;
@@ -72,7 +73,16 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         'application/vnd.dev.sigstore.bundle.v0.3+json',
     ];
 
-    private const SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS = 'PKIX_ECDSA_P256_SHA_256';
+    private const KEY_DETAILS_ECDSA_P256_SHA_256 = 'PKIX_ECDSA_P256_SHA_256';
+    private const KEY_DETAILS_ED25519            = 'PKIX_ED25519';
+
+    private const SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS = [
+        self::KEY_DETAILS_ECDSA_P256_SHA_256,
+        self::KEY_DETAILS_ED25519,
+    ];
+
+    private const ED25519_SPKI_DER_PREFIX_LENGTH = 12;
+    private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -287,20 +297,46 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 throw CheckpointKeyHintMismatch::forIndex($bundleIndex);
             }
 
-            $publicKey = openssl_pkey_get_public($transparencyLogKey['publicKey']->decoratedPublicKey());
-            Assert::notFalse($publicKey);
-
             if (
-                openssl_verify(
+                ! $this->verifyTransparencyLogSignature(
+                    $transparencyLogKey,
                     $parsedCheckpoint['noteText'],
                     $parsedCheckpoint['signature'],
-                    $publicKey,
-                    OPENSSL_ALGO_SHA256,
-                ) !== 1
+                )
             ) {
                 throw CheckpointSignatureVerificationFailed::forIndex($bundleIndex);
             }
         }
+    }
+
+    /**
+     * @param array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string} $transparencyLogKey
+     * @param non-empty-string                                                                      $signedContent
+     * @param non-empty-string                                                                      $signature
+     */
+    private function verifyTransparencyLogSignature(array $transparencyLogKey, string $signedContent, string $signature): bool
+    {
+        if ($transparencyLogKey['keyDetails'] === self::KEY_DETAILS_ED25519) {
+            return sodium_crypto_sign_verify_detached(
+                $signature,
+                $signedContent,
+                $this->extractRawEd25519PublicKey($transparencyLogKey['publicKey']),
+            );
+        }
+
+        $publicKey = openssl_pkey_get_public($transparencyLogKey['publicKey']->decoratedPublicKey());
+        Assert::notFalse($publicKey);
+
+        return openssl_verify($signedContent, $signature, $publicKey, OPENSSL_ALGO_SHA256) === 1;
+    }
+
+    /** @return non-empty-string */
+    private function extractRawEd25519PublicKey(PemPublicKey $publicKey): string
+    {
+        $derEncodedBytes = $publicKey->derEncodedBytes();
+        Assert::same(strlen($derEncodedBytes), self::ED25519_SPKI_DER_PREFIX_LENGTH + self::ED25519_RAW_PUBLIC_KEY_LENGTH);
+
+        return substr($derEncodedBytes, -self::ED25519_RAW_PUBLIC_KEY_LENGTH);
     }
 
     /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string} */
@@ -439,7 +475,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /**
      * @param non-empty-string $logId
      *
-     * @return array{publicKey: PemPublicKey, keyId: non-empty-string}
+     * @return array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string}
      */
     private function resolveTransparencyLogPublicKey(string $logId): array
     {
@@ -487,13 +523,14 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     continue;
                 }
 
-                if ($tlog['publicKey']['keyDetails'] !== self::SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS) {
+                if (! in_array($tlog['publicKey']['keyDetails'], self::SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS, true)) {
                     throw UnsupportedTransparencyLogKeyAlgorithm::fromKeyDetails($tlog['publicKey']['keyDetails']);
                 }
 
                 return [
                     'publicKey' => PemPublicKey::fromBase64EncodedDerBytes($tlog['publicKey']['rawBytes']),
                     'keyId' => $tlogKeyId,
+                    'keyDetails' => $tlog['publicKey']['keyDetails'],
                 ];
             }
         }

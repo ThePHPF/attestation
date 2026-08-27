@@ -138,8 +138,6 @@ jobs:
             test_verify[[]PATH-checkpoint-wrong-roothash_fail]
             test_verify[[]PATH-set-invalid-signature_fail]
 
-            test_verify[[]PATH-bundle-with-sct-with-extensions]
-
             test_verify[[]PATH-wrong-hashedrekord-artifact_fail]
             test_verify[[]PATH-wrong-hashedrekord-entry_fail]
             test_verify[[]PATH-wrong-hashedrekord-cert-and-sig_fail]
