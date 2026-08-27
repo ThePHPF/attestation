@@ -65,6 +65,8 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE  = __DIR__ . '/../../fixture/wrong-hashedrekord-cert-and-sig-fail.json';
     private const DSSE_MISMATCH_ENVELOPE_FIXTURE           = __DIR__ . '/../../fixture/dsse-mismatch-envelope-fail.json';
     private const DSSE_MISMATCH_SIG_FIXTURE                = __DIR__ . '/../../fixture/dsse-mismatch-sig-fail.json';
+    private const TLOG_KEY_VALIDITY_BUNDLE_FIXTURE         = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive.json';
+    private const TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE   = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive-trusted-root.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
@@ -199,6 +201,20 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(CheckpointSignatureVerificationFailed::class);
         $verifier->verify(
             $this->loadSctWithExtensionsFixtureBundleWithTamperedCheckpointSignature(),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testSuccessfulVerificationWhenIntegratedTimeIsExactlyAtTheTransparencyLogKeysValidityEnd(): void
+    {
+        $verifier = new VerifyBundleWithOpenSsl(self::TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE);
+
+        $this->expectNotToPerformAssertions();
+        $verifier->verify(
+            $this->loadFixtureBundle(self::TLOG_KEY_VALIDITY_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],

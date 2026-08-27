@@ -31,6 +31,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTr
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogKeyOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
@@ -64,6 +65,7 @@ use function ord;
 use function sodium_crypto_sign_verify_detached;
 use function str_replace;
 use function strlen;
+use function strtotime;
 use function substr;
 use function trim;
 
@@ -134,6 +136,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
+
+            $this->assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
 
@@ -207,6 +211,30 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     $transparencyLogEntry->integratedTime(),
                     $certificateValidFrom,
                     $certificateValidTo,
+                );
+            }
+        }
+    }
+
+    private function assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity(int $bundleIndex, Bundle $bundle): void
+    {
+        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
+            $integratedTime = $transparencyLogEntry->integratedTime();
+            if ($integratedTime === null) {
+                continue;
+            }
+
+            $validFor = $this->resolveTransparencyLogPublicKey($transparencyLogEntry->logId())['validFor'];
+
+            if (
+                $integratedTime < $validFor['start']
+                || ($validFor['end'] !== null && $integratedTime > $validFor['end'])
+            ) {
+                throw TransparencyLogKeyOutsideValidityPeriod::forIndex(
+                    $bundleIndex,
+                    $integratedTime,
+                    $validFor['start'],
+                    $validFor['end'],
                 );
             }
         }
@@ -516,9 +544,17 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     }
 
     /**
-     * @param array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string} $transparencyLogKey
-     * @param non-empty-string                                                                      $signedContent
-     * @param non-empty-string                                                                      $signature
+     * @param array{
+     *     publicKey: PemPublicKey,
+     *     keyId: non-empty-string,
+     *     keyDetails: non-empty-string,
+     *     validFor: array{
+     *         start: int,
+     *         end: int|null,
+     *     }
+     * } $transparencyLogKey
+     * @param non-empty-string $signedContent
+     * @param non-empty-string $signature
      */
     private function verifyTransparencyLogSignature(array $transparencyLogKey, string $signedContent, string $signature): bool
     {
@@ -602,7 +638,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
         $trustedRootCert = file_get_contents($this->trustedRootFilePath);
         Assert::stringNotEmpty($trustedRootCert);
-        $trustedRootJsonLines = explode("\n", trim($trustedRootCert));
 
         /**
          * Now go through our trusted root certificates and attempt to verify that the certificate was signed by an
@@ -614,11 +649,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
          * have multiple certificates (e.g. root certificates, intermediate certificates, expired certificates, etc.)
          * so we should loop over to find the correct certificate used to sign the attestation certificate.
          */
-        foreach ($trustedRootJsonLines as $jsonLine) {
-            /** @var mixed $decoded */
-            $decoded = json_decode($jsonLine, true);
-
-            // No certificate authorities defined in this JSON line, skip it...
+        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
+            // No certificate authorities defined in this document, skip it...
             if (
                 ! is_array($decoded)
                 || ! array_key_exists('certificateAuthorities', $decoded)
@@ -687,21 +719,42 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     }
 
     /**
+     * The production trusted root (`resources/trusted-root.jsonl`) is genuinely JSON Lines: multiple
+     * complete documents, one per line. A custom `--trusted-root` file is a single JSON document that
+     * may be pretty-printed across many lines, so naively splitting on newlines would shred it. Try
+     * parsing the whole file as one document first, and only fall back to line-by-line JSONL parsing
+     * if that fails.
+     *
+     * @return list<mixed>
+     */
+    private function parseTrustedRootDocuments(string $trustedRootCert): array
+    {
+        /** @var mixed $wholeFileDecoded */
+        $wholeFileDecoded = json_decode(trim($trustedRootCert), true);
+        if (is_array($wholeFileDecoded)) {
+            return [$wholeFileDecoded];
+        }
+
+        $documents = [];
+        foreach (explode("\n", trim($trustedRootCert)) as $jsonLine) {
+            $documents[] = json_decode($jsonLine, true);
+        }
+
+        return $documents;
+    }
+
+    /**
      * @param non-empty-string $logId
      *
-     * @return array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string}
+     * @return array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}}
      */
     private function resolveTransparencyLogPublicKey(string $logId): array
     {
         $trustedRootCert = file_get_contents($this->trustedRootFilePath);
         Assert::stringNotEmpty($trustedRootCert);
-        $trustedRootJsonLines = explode("\n", trim($trustedRootCert));
 
-        foreach ($trustedRootJsonLines as $jsonLine) {
-            /** @var mixed $decoded */
-            $decoded = json_decode($jsonLine, true);
-
-            // No transparency logs defined in this JSON line, skip it...
+        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
+            // No transparency logs defined in this document, skip it...
             if (
                 ! is_array($decoded)
                 || ! array_key_exists('tlogs', $decoded)
@@ -741,10 +794,31 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     throw UnsupportedTransparencyLogKeyAlgorithm::fromKeyDetails($tlog['publicKey']['keyDetails']);
                 }
 
+                Assert::keyExists($tlog['publicKey'], 'validFor');
+                Assert::isArray($tlog['publicKey']['validFor']);
+                Assert::keyExists($tlog['publicKey']['validFor'], 'start');
+                Assert::stringNotEmpty($tlog['publicKey']['validFor']['start']);
+                $validForStart = strtotime($tlog['publicKey']['validFor']['start']);
+                Assert::notFalse($validForStart);
+
+                $validForEnd = null;
+                if (
+                    array_key_exists('end', $tlog['publicKey']['validFor'])
+                    && $tlog['publicKey']['validFor']['end'] !== null
+                ) {
+                    Assert::stringNotEmpty($tlog['publicKey']['validFor']['end']);
+                    $validForEnd = strtotime($tlog['publicKey']['validFor']['end']);
+                    Assert::notFalse($validForEnd);
+                }
+
                 return [
                     'publicKey' => PemPublicKey::fromBase64EncodedDerBytes($tlog['publicKey']['rawBytes']),
                     'keyId' => $tlogKeyId,
                     'keyDetails' => $tlog['publicKey']['keyDetails'],
+                    'validFor' => [
+                        'start' => $validForStart,
+                        'end' => $validForEnd,
+                    ],
                 ];
             }
         }
