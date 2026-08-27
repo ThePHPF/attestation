@@ -21,6 +21,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
@@ -57,6 +58,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE     = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
     private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
     private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE        = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
+    private const SET_INVALID_SIGNATURE_FIXTURE            = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
@@ -338,6 +340,18 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(CheckpointRootHashMismatch::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(self::CHECKPOINT_WRONG_ROOTHASH_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithAnInvalidSignedEntryTimestamp(): void
+    {
+        $this->expectException(SignedEntryTimestampVerificationFailed::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::SET_INVALID_SIGNATURE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],

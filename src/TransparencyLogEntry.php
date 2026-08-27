@@ -20,12 +20,14 @@ final class TransparencyLogEntry
     /** @var non-empty-string */
     private string $logId;
     private string $canonicalizedBody;
+    /** @var non-empty-string|null */
     private ?string $signedEntryTimestamp;
     private ?InclusionProof $inclusionProof;
 
     /**
      * @param 'hashedrekord'|'dsse'|'intoto' $kind
      * @param non-empty-string               $logId
+     * @param non-empty-string|null          $signedEntryTimestamp
      */
     private function __construct(
         int $logIndex,
@@ -134,6 +136,7 @@ final class TransparencyLogEntry
         return $this->canonicalizedBody;
     }
 
+    /** @return non-empty-string|null */
     public function signedEntryTimestamp(): ?string
     {
         return $this->signedEntryTimestamp;
