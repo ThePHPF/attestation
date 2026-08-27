@@ -7,6 +7,7 @@ namespace ThePhpFoundation\UnitTest\Attestation;
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\PemPublicKey;
 
+use function base64_decode;
 use function openssl_pkey_get_public;
 
 /** @covers \ThePhpFoundation\Attestation\PemPublicKey */
@@ -29,5 +30,13 @@ final class PemPublicKeyTest extends TestCase
             ->decoratedPublicKey();
 
         self::assertNotFalse(openssl_pkey_get_public($decoratedPublicKey));
+    }
+
+    public function testDerEncodedBytesReturnsRawDecodedBytes(): void
+    {
+        $derEncodedBytes = PemPublicKey::fromBase64EncodedDerBytes(self::REAL_ECDSA_PUBLIC_KEY_DER)
+            ->derEncodedBytes();
+
+        self::assertSame(base64_decode(self::REAL_ECDSA_PUBLIC_KEY_DER), $derEncodedBytes);
     }
 }

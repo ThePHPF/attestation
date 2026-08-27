@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation;
 
+use Webmozart\Assert\Assert;
+
+use function base64_decode;
 use function wordwrap;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
@@ -34,5 +37,14 @@ final class PemPublicKey
         return "-----BEGIN PUBLIC KEY-----\n"
             . wordwrap($this->base64EncodedDerBytes, 64, "\n", true) . "\n"
             . "-----END PUBLIC KEY-----\n";
+    }
+
+    /** @return non-empty-string raw (non-base64, non-PEM) DER-encoded SubjectPublicKeyInfo bytes */
+    public function derEncodedBytes(): string
+    {
+        $decoded = base64_decode($this->base64EncodedDerBytes);
+        Assert::stringNotEmpty($decoded);
+
+        return $decoded;
     }
 }
