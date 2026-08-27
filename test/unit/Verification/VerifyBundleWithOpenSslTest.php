@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
@@ -55,6 +56,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const INCORRECT_PUBLIC_KEY_FIXTURE             = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
     private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE     = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
     private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
+    private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE        = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
@@ -324,6 +326,18 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectException(CheckpointKeyHintMismatch::class);
         $this->verifier->verify(
             $this->loadFixtureBundle(self::CHECKPOINT_BAD_KEYHINT_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
+            'message-signature-artifact.txt',
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
+    }
+
+    public function testRejectsBundleWithACheckpointRootHashMismatch(): void
+    {
+        $this->expectException(CheckpointRootHashMismatch::class);
+        $this->verifier->verify(
+            $this->loadFixtureBundle(self::CHECKPOINT_WRONG_ROOTHASH_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],

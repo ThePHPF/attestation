@@ -135,7 +135,6 @@ jobs:
             test_verify[[]DIGEST-rekor2-checkpoint-origin-not-first]
             test_verify[[]DIGEST-rekor2-timestamp-with-embedded-cert]
 
-            test_verify[[]PATH-checkpoint-wrong-roothash_fail]
             test_verify[[]PATH-set-invalid-signature_fail]
 
             test_verify[[]PATH-wrong-hashedrekord-artifact_fail]

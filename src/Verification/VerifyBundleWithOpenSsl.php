@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
@@ -306,6 +307,10 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             ) {
                 throw CheckpointSignatureVerificationFailed::forIndex($bundleIndex);
             }
+
+            if (! hash_equals($inclusionProof->rootHash(), $parsedCheckpoint['rootHash'])) {
+                throw CheckpointRootHashMismatch::forIndex($bundleIndex);
+            }
         }
     }
 
@@ -339,7 +344,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         return substr($derEncodedBytes, -self::ED25519_RAW_PUBLIC_KEY_LENGTH);
     }
 
-    /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string} */
+    /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string, rootHash: non-empty-string} */
     private function parseCheckpointEnvelope(int $bundleIndex, string $envelope): array
     {
         $lines          = explode("\n", $envelope);
@@ -349,6 +354,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             $blankLineIndex === false
             || ! isset($lines[$blankLineIndex + 1])
             || $lines[$blankLineIndex + 1] === ''
+            || ! isset($lines[2])
+            || $lines[2] === ''
         ) {
             throw InvalidCheckpointFormat::forIndex($bundleIndex);
         }
@@ -368,10 +375,16 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $signature = substr($signatureBlob, 4);
         Assert::stringNotEmpty($signature);
 
+        $rootHash = base64_decode($lines[2]);
+        if ($rootHash === '') {
+            throw InvalidCheckpointFormat::forIndex($bundleIndex);
+        }
+
         return [
             'noteText' => $noteText,
             'keyHint' => substr($signatureBlob, 0, 4),
             'signature' => $signature,
+            'rootHash' => $rootHash,
         ];
     }
 
