@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Verification;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
@@ -22,19 +24,24 @@ use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringL
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
+use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
+use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityOutsideValidityPeriod;
+use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogKeyOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
+use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -48,6 +55,7 @@ use function count;
 use function explode;
 use function extension_loaded;
 use function file_get_contents;
+use function file_put_contents;
 use function hash;
 use function hash_equals;
 use function implode;
@@ -57,21 +65,30 @@ use function is_readable;
 use function is_string;
 use function json_decode;
 use function json_encode;
+use function openssl_cms_verify;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
+use function preg_replace;
 use function sodium_crypto_sign_verify_detached;
 use function str_replace;
 use function strlen;
 use function strtotime;
 use function substr;
+use function sys_get_temp_dir;
+use function tempnam;
 use function trim;
+use function unlink;
 
 use const JSON_UNESCAPED_SLASHES;
 use const OPENSSL_ALGO_SHA256;
+use const OPENSSL_ENCODING_DER;
+use const PKCS7_BINARY;
+use const PKCS7_NOVERIFY;
 
+/** @phpstan-type TransparencyLogKey array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}} */
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
@@ -95,6 +112,16 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
 
     private const HASHEDREKORD_VERSION_0_0_2 = '0.0.2';
+
+    private const DER_TAG_BOOLEAN            = 0x01;
+    private const DER_TAG_OCTET_STRING       = 0x04;
+    private const DER_TAG_OBJECT_IDENTIFIER  = 0x06;
+    private const DER_TAG_GENERALIZED_TIME   = 0x18;
+    private const DER_TAG_SEQUENCE           = 0x30;
+    private const DER_TAG_CONTEXT_EXTENSIONS = 0xA3;
+
+    /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */
+    private const CT_PRECERT_SCTS_EXTENSION_OID_DER = "\x2b\x06\x01\x04\x01\xd6\x79\x02\x04\x02";
 
     /** @var non-empty-string */
     private string $trustedRootFilePath;
@@ -139,6 +166,8 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $this->assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity($bundleIndex, $bundle);
 
+            $this->assertRfc3161TimestampsAreValid($bundleIndex, $bundle);
+
             $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidCheckpoints($bundleIndex, $bundle);
@@ -149,12 +178,14 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $this->assertCertificateSignedByTrustedRoot($bundle);
 
+            $this->assertCertificateHasATrustedSignedCertificateTimestamp($bundle);
+
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
 
             $this->assertCertificateIdentity($bundle, $expectedCertificateIdentity);
 
             if ($bundle->content() instanceof DsseEnvelope) {
-                $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle->content());
+                $this->assertDigestFromAttestationMatchesActual($file, $bundle->content());
                 $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle->certificate(), $bundle->content());
             } elseif ($bundle->content() instanceof MessageSignature) {
                 $this->assertDigestFromMessageSignatureMatchesActual($file, $bundle->content());
@@ -240,6 +271,228 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
+    /** @link https://www.rfc-editor.org/rfc/rfc3161 */
+    private function assertRfc3161TimestampsAreValid(int $bundleIndex, Bundle $bundle): void
+    {
+        foreach ($bundle->rfc3161Timestamps() as $timestampToken) {
+            $genTime = $this->verifyRfc3161TimestampAndExtractGenTime($bundleIndex, $timestampToken);
+
+            $certificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
+            Assert::isArray($certificateInfo);
+            Assert::keyExists($certificateInfo, 'validFrom_time_t');
+            Assert::integer($certificateInfo['validFrom_time_t']);
+            Assert::keyExists($certificateInfo, 'validTo_time_t');
+            Assert::integer($certificateInfo['validTo_time_t']);
+
+            if ($genTime < $certificateInfo['validFrom_time_t'] || $genTime > $certificateInfo['validTo_time_t']) {
+                throw TimestampOutsideCertificateValidity::forIndex(
+                    $bundleIndex,
+                    $genTime,
+                    $certificateInfo['validFrom_time_t'],
+                    $certificateInfo['validTo_time_t'],
+                );
+            }
+        }
+    }
+
+    /** @param non-empty-string $timestampToken */
+    private function verifyRfc3161TimestampAndExtractGenTime(int $bundleIndex, string $timestampToken): int
+    {
+        [$validFor, $tstInfo] = $this->verifyCmsSignatureAgainstKnownTimestampAuthorities($bundleIndex, $timestampToken);
+
+        $genTime = $this->extractGeneralizedTime($bundleIndex, $tstInfo);
+
+        if (
+            $genTime < $validFor['start']
+            || ($validFor['end'] !== null && $genTime > $validFor['end'])
+        ) {
+            throw TimestampAuthorityOutsideValidityPeriod::forIndex($bundleIndex, $genTime, $validFor['start'], $validFor['end']);
+        }
+
+        return $genTime;
+    }
+
+    /**
+     * @param non-empty-string $timestampResponse
+     *
+     * @return array{0: array{start: int, end: int|null}, 1: non-empty-string} [matched TSA's validFor, TSTInfo DER bytes]
+     */
+    private function verifyCmsSignatureAgainstKnownTimestampAuthorities(int $bundleIndex, string $timestampResponse): array
+    {
+        [$outerTag, $outerContent] = $this->readDerTlv($timestampResponse, 0);
+        Assert::same($outerTag, self::DER_TAG_SEQUENCE);
+
+        [, , $statusInfoEnd] = $this->readDerTlv($outerContent, 0);
+        $timestampToken      = substr($outerContent, $statusInfoEnd);
+        Assert::stringNotEmpty($timestampToken);
+
+        $candidates = $this->timestampAuthorityCandidates();
+
+        $allCandidateCertsPem = '';
+        foreach ($candidates as $candidate) {
+            $allCandidateCertsPem .= $candidate['certChainPem'];
+        }
+
+        Assert::stringNotEmpty($allCandidateCertsPem);
+
+        $tokenFile   = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-token-');
+        $certsFile   = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-certs-');
+        $signersFile = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-signers-');
+        $tstInfoFile = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-tstinfo-');
+        Assert::notFalse($tokenFile);
+        Assert::notFalse($certsFile);
+        Assert::notFalse($signersFile);
+        Assert::notFalse($tstInfoFile);
+
+        try {
+            file_put_contents($tokenFile, $timestampToken);
+            file_put_contents($certsFile, $allCandidateCertsPem);
+
+            $verified = openssl_cms_verify(
+                $tokenFile,
+                PKCS7_NOVERIFY | PKCS7_BINARY,
+                $signersFile,
+                [],
+                $certsFile,
+                $tstInfoFile,
+                null,
+                null,
+                OPENSSL_ENCODING_DER,
+            );
+
+            if ($verified !== true) {
+                throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
+            }
+
+            $signersPem = file_get_contents($signersFile);
+            Assert::stringNotEmpty($signersPem);
+            $signingCertificateDer = $this->derFromPem($signersPem);
+
+            $tstInfo = file_get_contents($tstInfoFile);
+            Assert::stringNotEmpty($tstInfo);
+        } finally {
+            unlink($tokenFile);
+            unlink($certsFile);
+            unlink($signersFile);
+            unlink($tstInfoFile);
+        }
+
+        foreach ($candidates as $candidate) {
+            if (in_array($signingCertificateDer, $candidate['certChainDer'], true)) {
+                return [$candidate['validFor'], $tstInfo];
+            }
+        }
+
+        throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
+    }
+
+    /** @return list<array{certChainPem: non-empty-string, certChainDer: non-empty-list<non-empty-string>, validFor: array{start: int, end: int|null}}> */
+    private function timestampAuthorityCandidates(): array
+    {
+        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
+        Assert::stringNotEmpty($trustedRootCert);
+
+        $candidates = [];
+        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
+            if (
+                ! is_array($decoded)
+                || ! array_key_exists('timestampAuthorities', $decoded)
+                || ! is_array($decoded['timestampAuthorities'])
+            ) {
+                continue;
+            }
+
+            /** @var mixed $timestampAuthority */
+            foreach ($decoded['timestampAuthorities'] as $timestampAuthority) {
+                if (
+                    ! is_array($timestampAuthority)
+                    || ! array_key_exists('certChain', $timestampAuthority)
+                    || ! is_array($timestampAuthority['certChain'])
+                    || ! array_key_exists('certificates', $timestampAuthority['certChain'])
+                    || ! is_array($timestampAuthority['certChain']['certificates'])
+                    || ! array_key_exists('validFor', $timestampAuthority)
+                    || ! is_array($timestampAuthority['validFor'])
+                    || ! array_key_exists('start', $timestampAuthority['validFor'])
+                    || ! is_string($timestampAuthority['validFor']['start'])
+                    || $timestampAuthority['validFor']['start'] === ''
+                ) {
+                    continue;
+                }
+
+                $certChainPem = '';
+                $certChainDer = [];
+                /** @var mixed $certificateWrapper */
+                foreach ($timestampAuthority['certChain']['certificates'] as $certificateWrapper) {
+                    if (
+                        ! is_array($certificateWrapper)
+                        || ! array_key_exists('rawBytes', $certificateWrapper)
+                        || ! is_string($certificateWrapper['rawBytes'])
+                        || $certificateWrapper['rawBytes'] === ''
+                    ) {
+                        continue;
+                    }
+
+                    $certificate    = PemCertificate::fromBase64EncodedDerBytes($certificateWrapper['rawBytes']);
+                    $certChainPem  .= $certificate->decoratedCertificate();
+                    $certChainDer[] = $certificate->derEncodedBytes();
+                }
+
+                if ($certChainPem === '' || $certChainDer === []) {
+                    continue;
+                }
+
+                $validForStart = strtotime($timestampAuthority['validFor']['start']);
+                Assert::notFalse($validForStart);
+
+                $validForEnd = null;
+                if (
+                    array_key_exists('end', $timestampAuthority['validFor'])
+                    && $timestampAuthority['validFor']['end'] !== null
+                ) {
+                    Assert::stringNotEmpty($timestampAuthority['validFor']['end']);
+                    $validForEnd = strtotime($timestampAuthority['validFor']['end']);
+                    Assert::notFalse($validForEnd);
+                }
+
+                $candidates[] = [
+                    'certChainPem' => $certChainPem,
+                    'certChainDer' => $certChainDer,
+                    'validFor' => [
+                        'start' => $validForStart,
+                        'end' => $validForEnd,
+                    ],
+                ];
+            }
+        }
+
+        return $candidates;
+    }
+
+    /** @param non-empty-string $tstInfo */
+    private function extractGeneralizedTime(int $bundleIndex, string $tstInfo): int
+    {
+        [$tag, $content] = $this->readDerTlv($tstInfo, 0);
+        Assert::same($tag, self::DER_TAG_SEQUENCE);
+
+        $offset = 0;
+        for ($i = 0; $i < 4; $i++) {
+            [, , $offset] = $this->readDerTlv($content, $offset);
+        }
+
+        [$genTimeTag, $genTimeValue] = $this->readDerTlv($content, $offset);
+        Assert::same($genTimeTag, self::DER_TAG_GENERALIZED_TIME);
+
+        $genTimeValue = preg_replace('/\.\d+Z$/', 'Z', $genTimeValue);
+        Assert::stringNotEmpty($genTimeValue);
+
+        $genTime = DateTimeImmutable::createFromFormat('YmdHis\Z', $genTimeValue, new DateTimeZone('UTC'));
+        if ($genTime === false) {
+            throw InvalidRfc3161TimestampFormat::forIndex($bundleIndex);
+        }
+
+        return $genTime->getTimestamp();
+    }
+
     /**
      * @link https://www.rfc-editor.org/rfc/rfc6962#section-2.1.1
      * @link https://github.com/transparency-dev/merkle/blob/main/proof/verify.go
@@ -249,7 +502,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
             $inclusionProof = $transparencyLogEntry->inclusionProof();
             if ($inclusionProof === null) {
-                continue;
+                throw InvalidMerkleInclusionProof::forIndex($bundleIndex);
             }
 
             $index = $inclusionProof->logIndex();
@@ -402,6 +655,13 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                     $bundle->content(),
                     $bundle->certificate(),
                 );
+            } elseif ($transparencyLogEntry->kind() === 'intoto' && $bundle->content() instanceof DsseEnvelope) {
+                $this->assertIntotoEntryMatchesBundleContent(
+                    $bundleIndex,
+                    $transparencyLogEntry,
+                    $bundle->content(),
+                    $bundle->certificate(),
+                );
             }
         }
     }
@@ -543,18 +803,50 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
+    private function assertIntotoEntryMatchesBundleContent(
+        int $bundleIndex,
+        TransparencyLogEntry $transparencyLogEntry,
+        DsseEnvelope $content,
+        PemCertificate $certificate
+    ): void {
+        /** @var array<array-key, mixed> $body */
+        $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
+        Assert::isArray($body['spec']);
+        Assert::isArray($body['spec']['content']);
+        Assert::isArray($body['spec']['content']['payloadHash']);
+        Assert::stringNotEmpty($body['spec']['content']['payloadHash']['value']);
+
+        $actualPayloadHash = hash('sha256', $content->payload());
+        if (! hash_equals($actualPayloadHash, $body['spec']['content']['payloadHash']['value'])) {
+            throw DigestMismatch::fromChecksumMismatch($actualPayloadHash, $body['spec']['content']['payloadHash']['value']);
+        }
+
+        Assert::isArray($body['spec']['content']['envelope']);
+        Assert::isArray($body['spec']['content']['envelope']['signatures']);
+        Assert::isArray($body['spec']['content']['envelope']['signatures'][0]);
+        Assert::stringNotEmpty($body['spec']['content']['envelope']['signatures'][0]['sig']);
+        $entrySignatureBase64 = base64_decode($body['spec']['content']['envelope']['signatures'][0]['sig']);
+        Assert::stringNotEmpty($entrySignatureBase64);
+        $entrySignature = base64_decode($entrySignatureBase64);
+        Assert::stringNotEmpty($entrySignature);
+
+        if (! hash_equals($content->signature(), $entrySignature)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'signature');
+        }
+
+        Assert::stringNotEmpty($body['spec']['content']['envelope']['signatures'][0]['publicKey']);
+        $entryCertificatePem = base64_decode($body['spec']['content']['envelope']['signatures'][0]['publicKey']);
+        Assert::stringNotEmpty($entryCertificatePem);
+
+        if (! hash_equals($certificate->derEncodedBytes(), $this->derFromPem($entryCertificatePem))) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
+        }
+    }
+
     /**
-     * @param array{
-     *     publicKey: PemPublicKey,
-     *     keyId: non-empty-string,
-     *     keyDetails: non-empty-string,
-     *     validFor: array{
-     *         start: int,
-     *         end: int|null,
-     *     }
-     * } $transparencyLogKey
-     * @param non-empty-string $signedContent
-     * @param non-empty-string $signature
+     * @param TransparencyLogKey $transparencyLogKey
+     * @param non-empty-string   $signedContent
+     * @param non-empty-string   $signature
      */
     private function verifyTransparencyLogSignature(array $transparencyLogKey, string $signedContent, string $signature): bool
     {
@@ -746,7 +1038,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /**
      * @param non-empty-string $logId
      *
-     * @return array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}}
+     * @return TransparencyLogKey
      */
     private function resolveTransparencyLogPublicKey(string $logId): array
     {
@@ -824,6 +1116,164 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
 
         throw NoTransparencyLogKeyInTrustedRoot::fromLogId(bin2hex($logId));
+    }
+
+    private function assertCertificateHasATrustedSignedCertificateTimestamp(Bundle $bundle): void
+    {
+        $logIds = $this->extractSignedCertificateTimestampLogIds($bundle->certificate()->derEncodedBytes());
+
+        foreach ($logIds as $logId) {
+            if ($this->isCertificateTransparencyLogIdTrusted($logId)) {
+                return;
+            }
+        }
+
+        throw UntrustedCertificateTransparencyLogKey::new();
+    }
+
+    /** @return non-empty-list<non-empty-string> */
+    private function extractSignedCertificateTimestampLogIds(string $certificateDer): array
+    {
+        [$certTag, $certContent] = $this->readDerTlv($certificateDer, 0);
+        Assert::same($certTag, self::DER_TAG_SEQUENCE);
+
+        [$tbsTag, $tbsContent] = $this->readDerTlv($certContent, 0);
+        Assert::same($tbsTag, self::DER_TAG_SEQUENCE);
+
+        $extensionsBlock = null;
+        $offset          = 0;
+        while ($offset < strlen($tbsContent)) {
+            [$fieldTag, $fieldValue, $offset] = $this->readDerTlv($tbsContent, $offset);
+            if ($fieldTag !== self::DER_TAG_CONTEXT_EXTENSIONS) {
+                continue;
+            }
+
+            $extensionsBlock = $fieldValue;
+        }
+
+        Assert::stringNotEmpty($extensionsBlock);
+
+        [$extSeqTag, $extSeqContent] = $this->readDerTlv($extensionsBlock, 0);
+        Assert::same($extSeqTag, self::DER_TAG_SEQUENCE);
+
+        $sctExtensionValue = null;
+        $offset            = 0;
+        while ($offset < strlen($extSeqContent)) {
+            [$extTag, $extContent, $offset] = $this->readDerTlv($extSeqContent, $offset);
+            if ($extTag !== self::DER_TAG_SEQUENCE) {
+                continue;
+            }
+
+            [$oidTag, $oidValue, $innerOffset] = $this->readDerTlv($extContent, 0);
+            Assert::same($oidTag, self::DER_TAG_OBJECT_IDENTIFIER);
+            if ($oidValue !== self::CT_PRECERT_SCTS_EXTENSION_OID_DER) {
+                continue;
+            }
+
+            [$nextTag, $nextValue, $innerOffset] = $this->readDerTlv($extContent, $innerOffset);
+            if ($nextTag === self::DER_TAG_BOOLEAN) {
+                [$nextTag, $nextValue] = $this->readDerTlv($extContent, $innerOffset);
+            }
+
+            Assert::same($nextTag, self::DER_TAG_OCTET_STRING);
+            $sctExtensionValue = $nextValue;
+        }
+
+        Assert::stringNotEmpty($sctExtensionValue);
+
+        [$innerOctetStringTag, $sctList] = $this->readDerTlv($sctExtensionValue, 0);
+        Assert::same($innerOctetStringTag, self::DER_TAG_OCTET_STRING);
+        Assert::true(strlen($sctList) >= 2);
+
+        $logIds = [];
+        $offset = 2; // Skip the 2-byte total-length prefix of the SignedCertificateTimestampList.
+        while ($offset < strlen($sctList)) {
+            Assert::true($offset + 2 <= strlen($sctList));
+            $sctLength = (ord($sctList[$offset]) << 8) | ord($sctList[$offset + 1]);
+            $offset   += 2;
+
+            Assert::true($offset + $sctLength <= strlen($sctList));
+            $sct     = substr($sctList, $offset, $sctLength);
+            $offset += $sctLength;
+
+            // SignedCertificateTimestamp ::= version(1) || log_id(32) || timestamp(8) || extensions(...) || signature(...)
+            Assert::true(strlen($sct) >= 33);
+            $logId = substr($sct, 1, 32);
+            Assert::stringNotEmpty($logId);
+            $logIds[] = $logId;
+        }
+
+        Assert::isNonEmptyList($logIds);
+
+        return $logIds;
+    }
+
+    /** @return array{0: int, 1: string, 2: int} */
+    private function readDerTlv(string $data, int $offset): array
+    {
+        Assert::true($offset + 2 <= strlen($data));
+
+        $tag = ord($data[$offset]);
+        $offset++;
+
+        $lengthByte = ord($data[$offset]);
+        $offset++;
+
+        if ($lengthByte < 0x80) {
+            $length = $lengthByte;
+        } else {
+            $numberOfLengthBytes = $lengthByte & 0x7F;
+            Assert::true($offset + $numberOfLengthBytes <= strlen($data));
+
+            $length = 0;
+            for ($i = 0; $i < $numberOfLengthBytes; $i++) {
+                $length = ($length << 8) | ord($data[$offset]);
+                $offset++;
+            }
+        }
+
+        Assert::true($offset + $length <= strlen($data));
+        $value = substr($data, $offset, $length);
+
+        return [$tag, $value, $offset + $length];
+    }
+
+    /** @param non-empty-string $logId */
+    private function isCertificateTransparencyLogIdTrusted(string $logId): bool
+    {
+        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
+        Assert::stringNotEmpty($trustedRootCert);
+
+        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
+            if (
+                ! is_array($decoded)
+                || ! array_key_exists('ctlogs', $decoded)
+                || ! is_array($decoded['ctlogs'])
+            ) {
+                continue;
+            }
+
+            /** @var mixed $ctlog */
+            foreach ($decoded['ctlogs'] as $ctlog) {
+                if (
+                    ! is_array($ctlog)
+                    || ! array_key_exists('logId', $ctlog)
+                    || ! is_array($ctlog['logId'])
+                    || ! array_key_exists('keyId', $ctlog['logId'])
+                    || ! is_string($ctlog['logId']['keyId'])
+                    || $ctlog['logId']['keyId'] === ''
+                ) {
+                    continue;
+                }
+
+                $ctlogKeyId = base64_decode($ctlog['logId']['keyId']);
+                if ($ctlogKeyId !== '' && hash_equals($logId, $ctlogKeyId)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** @param array<non-empty-string, string> $extensions */
@@ -956,8 +1406,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
     }
 
-    /** @param non-empty-string|null $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, ?string $expectedSubjectName, DsseEnvelope $envelope): void
+    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, DsseEnvelope $envelope): void
     {
         /** @var mixed $decodedPayload */
         $decodedPayload = json_decode($envelope->payload(), true);
@@ -970,7 +1419,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             || ! array_key_exists(0, $decodedPayload['subject'])
             || ! is_array($decodedPayload['subject'][0])
             || ! array_key_exists('name', $decodedPayload['subject'][0])
-            || ($expectedSubjectName !== null && $decodedPayload['subject'][0]['name'] !== $expectedSubjectName)
             || ! array_key_exists('digest', $decodedPayload['subject'][0])
             || ! is_array($decodedPayload['subject'][0]['digest'])
             || ! array_key_exists('sha256', $decodedPayload['subject'][0]['digest'])

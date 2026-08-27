@@ -127,10 +127,6 @@ jobs:
 
             test_verify[[]DIGEST-trust-root-tsa-validity-end-inclusive]
 
-            test_verify[[]DIGEST-intoto-log-entry-mismatch_fail]
-            test_verify[[]DIGEST-intoto-tsa-timestamp-outside-cert-validity_fail]
-            test_verify[[]DIGEST-intoto-missing-inclusion-proof_fail]
-            test_verify[[]PATH-intoto-with-custom-trust-root]
 
             test_verify[[]PATH-managed-key-happy-path]
             test_verify[[]PATH-managed-key-and-trusted-root]
@@ -144,16 +140,10 @@ jobs:
             test_verify[[]DIGEST-bundle-with-sct-with-extensions]
             test_verify[[]DIGEST-trust-root-tlog-validity-end-inclusive]
 
-            test_verify[[]PATH-invalid-ct-key_fail]
-            test_verify[[]PATH-rekor2-timestamp-untrusted-tsa-without-embedded-cert_fail]
-            test_verify[[]PATH-rekor2-timestamp-untrusted-tsa-with-embedded-cert_fail]
             test_verify[[]PATH-rekor2-timestamp-outside-tsa-cert-validity_fail]
             test_verify[[]PATH-rekor2-timestamp-payload-mismatch_fail]
             test_verify[[]PATH-rekor2-no-timestamp_fail]
             test_verify[[]PATH-rekor2-dsse-mismatch-sig_fail]
             test_verify[[]PATH-rekor2-dsse-mismatch-envelope_fail]
-            test_verify[[]PATH-rekor2-timestamp-outside-trust-root-tsa-validity_fail]
-            test_verify[[]PATH-rekor2-no-inclusion-proof_fail]
-            test_verify[[]PATH-rekor2-timestamp-with-incorrect-time_fail]
             test_verify[[]DIGEST-rekor2-dsse-mismatch-sig_fail]
             test_verify[[]DIGEST-rekor2-dsse-mismatch-envelope_fail]

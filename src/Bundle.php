@@ -7,6 +7,8 @@ namespace ThePhpFoundation\Attestation;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
+use function base64_decode;
+use function is_array;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class Bundle
@@ -17,17 +19,21 @@ final class Bundle
     private SigstoreBundleContent $content;
     /** @var list<TransparencyLogEntry> */
     private array $transparencyLogEntries;
+    /** @var list<non-empty-string> */
+    private array $rfc3161Timestamps;
 
     /**
      * @param non-empty-string           $mediaType
      * @param list<TransparencyLogEntry> $transparencyLogEntries
+     * @param list<non-empty-string>     $rfc3161Timestamps
      */
-    private function __construct(string $mediaType, PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries)
+    private function __construct(string $mediaType, PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries, array $rfc3161Timestamps)
     {
         $this->mediaType              = $mediaType;
         $this->certificate            = $certificate;
         $this->content                = $content;
         $this->transparencyLogEntries = $transparencyLogEntries;
+        $this->rfc3161Timestamps      = $rfc3161Timestamps;
     }
 
     /** @param array<array-key, mixed> $bundle */
@@ -43,6 +49,7 @@ final class Bundle
             self::certificateFromVerificationMaterial($bundle['verificationMaterial']),
             self::contentFromBundle($bundle),
             self::transparencyLogEntriesFromVerificationMaterial($bundle['verificationMaterial']),
+            self::rfc3161TimestampsFromVerificationMaterial($bundle['verificationMaterial']),
         );
     }
 
@@ -68,6 +75,12 @@ final class Bundle
         return $this->transparencyLogEntries;
     }
 
+    /** @return list<non-empty-string> */
+    public function rfc3161Timestamps(): array
+    {
+        return $this->rfc3161Timestamps;
+    }
+
     /**
      * @param array<array-key, mixed> $verificationMaterial
      *
@@ -88,6 +101,38 @@ final class Bundle
         }
 
         return $transparencyLogEntries;
+    }
+
+    /**
+     * @param array<array-key, mixed> $verificationMaterial
+     *
+     * @return list<non-empty-string>
+     */
+    private static function rfc3161TimestampsFromVerificationMaterial(array $verificationMaterial): array
+    {
+        if (
+            ! array_key_exists('timestampVerificationData', $verificationMaterial)
+            || ! is_array($verificationMaterial['timestampVerificationData'])
+            || ! array_key_exists('rfc3161Timestamps', $verificationMaterial['timestampVerificationData'])
+        ) {
+            return [];
+        }
+
+        Assert::isArray($verificationMaterial['timestampVerificationData']['rfc3161Timestamps']);
+
+        $timestamps = [];
+        foreach ($verificationMaterial['timestampVerificationData']['rfc3161Timestamps'] as $timestamp) {
+            Assert::isArray($timestamp);
+            Assert::keyExists($timestamp, 'signedTimestamp');
+            Assert::stringNotEmpty($timestamp['signedTimestamp']);
+
+            $decoded = base64_decode($timestamp['signedTimestamp']);
+            Assert::stringNotEmpty($decoded);
+
+            $timestamps[] = $decoded;
+        }
+
+        return $timestamps;
     }
 
     /** @param array<array-key, mixed> $bundle */
