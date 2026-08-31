@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Verification;
 
-use DateTimeImmutable;
-use DateTimeZone;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
@@ -14,6 +12,7 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
@@ -27,17 +26,13 @@ use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
-use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityOutsideValidityPeriod;
-use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
@@ -54,7 +49,6 @@ use function count;
 use function explode;
 use function extension_loaded;
 use function file_get_contents;
-use function file_put_contents;
 use function hash;
 use function hash_equals;
 use function implode;
@@ -64,27 +58,18 @@ use function is_readable;
 use function is_string;
 use function json_decode;
 use function json_encode;
-use function openssl_cms_verify;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
-use function preg_replace;
 use function sodium_crypto_sign_verify_detached;
-use function str_replace;
 use function strlen;
 use function substr;
-use function sys_get_temp_dir;
-use function tempnam;
 use function trim;
-use function unlink;
 
 use const JSON_UNESCAPED_SLASHES;
 use const OPENSSL_ALGO_SHA256;
-use const OPENSSL_ENCODING_DER;
-use const PKCS7_BINARY;
-use const PKCS7_NOVERIFY;
 
 /** @phpstan-type TransparencyLogKey array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}} */
 class VerifyBundleWithOpenSsl implements VerifyBundle
@@ -95,13 +80,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
 
     private const HASHEDREKORD_VERSION_0_0_2 = '0.0.2';
-
-    private const DER_TAG_BOOLEAN            = 0x01;
-    private const DER_TAG_OCTET_STRING       = 0x04;
-    private const DER_TAG_OBJECT_IDENTIFIER  = 0x06;
-    private const DER_TAG_GENERALIZED_TIME   = 0x18;
-    private const DER_TAG_SEQUENCE           = 0x30;
-    private const DER_TAG_CONTEXT_EXTENSIONS = 0xA3;
 
     /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */
     private const CT_PRECERT_SCTS_EXTENSION_OID_DER = "\x2b\x06\x01\x04\x01\xd6\x79\x02\x04\x02";
@@ -139,6 +117,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesHaveValidLogIndex(),
             new TransparencyLogEntriesAreWithinCertificateValidity(),
             new TransparencyLogEntriesAreWithinTransparencyLogKeyValidity($trustedRoot),
+            new Rfc3161TimestampsAreValid($trustedRoot),
         ];
     }
 
@@ -166,8 +145,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertRfc3161TimestampsAreValid($bundleIndex, $bundle);
-
             $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidCheckpoints($bundleIndex, $bundle);
@@ -194,146 +171,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 throw UnsupportedBundleContent::new();
             }
         }
-    }
-
-    /** @link https://www.rfc-editor.org/rfc/rfc3161 */
-    private function assertRfc3161TimestampsAreValid(int $bundleIndex, Bundle $bundle): void
-    {
-        foreach ($bundle->rfc3161Timestamps() as $timestampToken) {
-            $genTime = $this->verifyRfc3161TimestampAndExtractGenTime($bundleIndex, $timestampToken);
-
-            $certificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
-            Assert::isArray($certificateInfo);
-            Assert::keyExists($certificateInfo, 'validFrom_time_t');
-            Assert::integer($certificateInfo['validFrom_time_t']);
-            Assert::keyExists($certificateInfo, 'validTo_time_t');
-            Assert::integer($certificateInfo['validTo_time_t']);
-
-            if ($genTime < $certificateInfo['validFrom_time_t'] || $genTime > $certificateInfo['validTo_time_t']) {
-                throw TimestampOutsideCertificateValidity::forIndex(
-                    $bundleIndex,
-                    $genTime,
-                    $certificateInfo['validFrom_time_t'],
-                    $certificateInfo['validTo_time_t'],
-                );
-            }
-        }
-    }
-
-    /** @param non-empty-string $timestampToken */
-    private function verifyRfc3161TimestampAndExtractGenTime(int $bundleIndex, string $timestampToken): int
-    {
-        [$validFor, $tstInfo] = $this->verifyCmsSignatureAgainstKnownTimestampAuthorities($bundleIndex, $timestampToken);
-
-        $genTime = $this->extractGeneralizedTime($bundleIndex, $tstInfo);
-
-        if (
-            $genTime < $validFor['start']
-            || ($validFor['end'] !== null && $genTime > $validFor['end'])
-        ) {
-            throw TimestampAuthorityOutsideValidityPeriod::forIndex($bundleIndex, $genTime, $validFor['start'], $validFor['end']);
-        }
-
-        return $genTime;
-    }
-
-    /**
-     * @param non-empty-string $timestampResponse
-     *
-     * @return array{0: array{start: int, end: int|null}, 1: non-empty-string} [matched TSA's validFor, TSTInfo DER bytes]
-     */
-    private function verifyCmsSignatureAgainstKnownTimestampAuthorities(int $bundleIndex, string $timestampResponse): array
-    {
-        [$outerTag, $outerContent] = $this->readDerTlv($timestampResponse, 0);
-        Assert::same($outerTag, self::DER_TAG_SEQUENCE);
-
-        [, , $statusInfoEnd] = $this->readDerTlv($outerContent, 0);
-        $timestampToken      = substr($outerContent, $statusInfoEnd);
-        Assert::stringNotEmpty($timestampToken);
-
-        $candidates = $this->trustedRoot->timestampAuthorityCandidates();
-
-        $allCandidateCertsPem = '';
-        foreach ($candidates as $candidate) {
-            $allCandidateCertsPem .= $candidate['certChainPem'];
-        }
-
-        Assert::stringNotEmpty($allCandidateCertsPem);
-
-        $tokenFile   = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-token-');
-        $certsFile   = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-certs-');
-        $signersFile = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-signers-');
-        $tstInfoFile = tempnam(sys_get_temp_dir(), 'sigstore-rfc3161-tstinfo-');
-        Assert::notFalse($tokenFile);
-        Assert::notFalse($certsFile);
-        Assert::notFalse($signersFile);
-        Assert::notFalse($tstInfoFile);
-
-        try {
-            file_put_contents($tokenFile, $timestampToken);
-            file_put_contents($certsFile, $allCandidateCertsPem);
-
-            $verified = openssl_cms_verify(
-                $tokenFile,
-                PKCS7_NOVERIFY | PKCS7_BINARY,
-                $signersFile,
-                [],
-                $certsFile,
-                $tstInfoFile,
-                null,
-                null,
-                OPENSSL_ENCODING_DER,
-            );
-
-            if ($verified !== true) {
-                throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
-            }
-
-            $signersPem = file_get_contents($signersFile);
-            Assert::stringNotEmpty($signersPem);
-            $signingCertificateDer = $this->derFromPem($signersPem);
-
-            $tstInfo = file_get_contents($tstInfoFile);
-            Assert::stringNotEmpty($tstInfo);
-        } finally {
-            unlink($tokenFile);
-            unlink($certsFile);
-            unlink($signersFile);
-            unlink($tstInfoFile);
-        }
-
-        foreach ($candidates as $candidate) {
-            if (in_array($signingCertificateDer, $candidate['certChainDer'], true)) {
-                return [$candidate['validFor'], $tstInfo];
-            }
-        }
-
-        throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
-    }
-
-    /** @param non-empty-string $tstInfo */
-    private function extractGeneralizedTime(int $bundleIndex, string $tstInfo): int
-    {
-        [$tag, $content] = $this->readDerTlv($tstInfo, 0);
-        Assert::same($tag, self::DER_TAG_SEQUENCE);
-
-        $offset = 0;
-        for ($i = 0; $i < 4; $i++) {
-            [, , $offset] = $this->readDerTlv($content, $offset);
-        }
-
-        [$genTimeTag, $genTimeValue] = $this->readDerTlv($content, $offset);
-        Assert::same($genTimeTag, self::DER_TAG_GENERALIZED_TIME);
-
-        $genTimeValue = preg_replace('/\.\d+Z$/', 'Z', $genTimeValue);
-        Assert::stringNotEmpty($genTimeValue);
-
-        $genTime = DateTimeImmutable::createFromFormat('YmdHis\Z', $genTimeValue, new DateTimeZone('UTC'));
-        if ($genTime === false) {
-            throw InvalidRfc3161TimestampFormat::forIndex($bundleIndex);
-        }
-
-        return $genTime->getTimestamp();
     }
 
     /**
@@ -562,7 +399,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         return [
             $spec['data']['hash']['value'],
             $spec['signature']['content'],
-            $this->derFromPem($certificatePem),
+            Der::bytesFromPem($certificatePem),
         ];
     }
 
@@ -597,19 +434,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         ];
     }
 
-    /** @return non-empty-string */
-    private function derFromPem(string $pem): string
-    {
-        $der = base64_decode(str_replace(
-            ['-----BEGIN CERTIFICATE-----', '-----END CERTIFICATE-----', "\r", "\n"],
-            '',
-            $pem,
-        ));
-        Assert::stringNotEmpty($der);
-
-        return $der;
-    }
-
     private function assertDsseEntryMatchesBundleContent(
         int $bundleIndex,
         TransparencyLogEntry $transparencyLogEntry,
@@ -641,7 +465,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $entryCertificatePem = base64_decode($body['spec']['signatures'][0]['verifier']);
         Assert::stringNotEmpty($entryCertificatePem);
 
-        if (! hash_equals($certificate->derEncodedBytes(), $this->derFromPem($entryCertificatePem))) {
+        if (! hash_equals($certificate->derEncodedBytes(), Der::bytesFromPem($entryCertificatePem))) {
             throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
         }
     }
@@ -681,7 +505,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $entryCertificatePem = base64_decode($body['spec']['content']['envelope']['signatures'][0]['publicKey']);
         Assert::stringNotEmpty($entryCertificatePem);
 
-        if (! hash_equals($certificate->derEncodedBytes(), $this->derFromPem($entryCertificatePem))) {
+        if (! hash_equals($certificate->derEncodedBytes(), Der::bytesFromPem($entryCertificatePem))) {
             throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
         }
     }
@@ -799,17 +623,17 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @return non-empty-list<non-empty-string> */
     private function extractSignedCertificateTimestampLogIds(string $certificateDer): array
     {
-        [$certTag, $certContent] = $this->readDerTlv($certificateDer, 0);
-        Assert::same($certTag, self::DER_TAG_SEQUENCE);
+        [$certTag, $certContent] = Der::readTlv($certificateDer, 0);
+        Assert::same($certTag, Der::TAG_SEQUENCE);
 
-        [$tbsTag, $tbsContent] = $this->readDerTlv($certContent, 0);
-        Assert::same($tbsTag, self::DER_TAG_SEQUENCE);
+        [$tbsTag, $tbsContent] = Der::readTlv($certContent, 0);
+        Assert::same($tbsTag, Der::TAG_SEQUENCE);
 
         $extensionsBlock = null;
         $offset          = 0;
         while ($offset < strlen($tbsContent)) {
-            [$fieldTag, $fieldValue, $offset] = $this->readDerTlv($tbsContent, $offset);
-            if ($fieldTag !== self::DER_TAG_CONTEXT_EXTENSIONS) {
+            [$fieldTag, $fieldValue, $offset] = Der::readTlv($tbsContent, $offset);
+            if ($fieldTag !== Der::TAG_CONTEXT_EXTENSIONS) {
                 continue;
             }
 
@@ -818,36 +642,36 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
         Assert::stringNotEmpty($extensionsBlock);
 
-        [$extSeqTag, $extSeqContent] = $this->readDerTlv($extensionsBlock, 0);
-        Assert::same($extSeqTag, self::DER_TAG_SEQUENCE);
+        [$extSeqTag, $extSeqContent] = Der::readTlv($extensionsBlock, 0);
+        Assert::same($extSeqTag, Der::TAG_SEQUENCE);
 
         $sctExtensionValue = null;
         $offset            = 0;
         while ($offset < strlen($extSeqContent)) {
-            [$extTag, $extContent, $offset] = $this->readDerTlv($extSeqContent, $offset);
-            if ($extTag !== self::DER_TAG_SEQUENCE) {
+            [$extTag, $extContent, $offset] = Der::readTlv($extSeqContent, $offset);
+            if ($extTag !== Der::TAG_SEQUENCE) {
                 continue;
             }
 
-            [$oidTag, $oidValue, $innerOffset] = $this->readDerTlv($extContent, 0);
-            Assert::same($oidTag, self::DER_TAG_OBJECT_IDENTIFIER);
+            [$oidTag, $oidValue, $innerOffset] = Der::readTlv($extContent, 0);
+            Assert::same($oidTag, Der::TAG_OBJECT_IDENTIFIER);
             if ($oidValue !== self::CT_PRECERT_SCTS_EXTENSION_OID_DER) {
                 continue;
             }
 
-            [$nextTag, $nextValue, $innerOffset] = $this->readDerTlv($extContent, $innerOffset);
-            if ($nextTag === self::DER_TAG_BOOLEAN) {
-                [$nextTag, $nextValue] = $this->readDerTlv($extContent, $innerOffset);
+            [$nextTag, $nextValue, $innerOffset] = Der::readTlv($extContent, $innerOffset);
+            if ($nextTag === Der::TAG_BOOLEAN) {
+                [$nextTag, $nextValue] = Der::readTlv($extContent, $innerOffset);
             }
 
-            Assert::same($nextTag, self::DER_TAG_OCTET_STRING);
+            Assert::same($nextTag, Der::TAG_OCTET_STRING);
             $sctExtensionValue = $nextValue;
         }
 
         Assert::stringNotEmpty($sctExtensionValue);
 
-        [$innerOctetStringTag, $sctList] = $this->readDerTlv($sctExtensionValue, 0);
-        Assert::same($innerOctetStringTag, self::DER_TAG_OCTET_STRING);
+        [$innerOctetStringTag, $sctList] = Der::readTlv($sctExtensionValue, 0);
+        Assert::same($innerOctetStringTag, Der::TAG_OCTET_STRING);
         Assert::true(strlen($sctList) >= 2);
 
         $logIds = [];
@@ -872,38 +696,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
         return $logIds;
     }
-
-    /** @return array{0: int, 1: string, 2: int} */
-    private function readDerTlv(string $data, int $offset): array
-    {
-        Assert::true($offset + 2 <= strlen($data));
-
-        $tag = ord($data[$offset]);
-        $offset++;
-
-        $lengthByte = ord($data[$offset]);
-        $offset++;
-
-        if ($lengthByte < 0x80) {
-            $length = $lengthByte;
-        } else {
-            $numberOfLengthBytes = $lengthByte & 0x7F;
-            Assert::true($offset + $numberOfLengthBytes <= strlen($data));
-
-            $length = 0;
-            for ($i = 0; $i < $numberOfLengthBytes; $i++) {
-                $length = ($length << 8) | ord($data[$offset]);
-                $offset++;
-            }
-        }
-
-        Assert::true($offset + $length <= strlen($data));
-        $value = substr($data, $offset, $length);
-
-        return [$tag, $value, $offset + $length];
-    }
-
-    /** @param non-empty-string $logId */
 
     /** @param array<non-empty-string, string> $extensions */
     private function assertCertificateExtensionClaims(Bundle $bundle, array $extensions): void

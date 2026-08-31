@@ -18,7 +18,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionPr
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
-use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
@@ -71,8 +70,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const INVALID_CT_KEY_TRUSTED_ROOT                 = __DIR__ . '/../../fixture/invalid-ct-key-fail-trusted-root.json';
     private const TSA_VALIDITY_BUNDLE_FIXTURE                 = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive.json';
     private const TSA_VALIDITY_TRUSTED_ROOT_FIXTURE           = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive-trusted-root.json';
-    private const UNTRUSTED_TSA_BUNDLE_FIXTURE                = __DIR__ . '/../../fixture/rekor2-timestamp-untrusted-tsa-with-embedded-cert-fail.json';
-    private const UNTRUSTED_TSA_TRUSTED_ROOT_FIXTURE          = __DIR__ . '/../../fixture/rekor2-timestamp-untrusted-tsa-with-embedded-cert-fail-trusted-root.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE          = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE    = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
@@ -277,20 +274,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::TSA_VALIDITY_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsAnRfc3161TimestampSignedByAnUntrustedTimestampAuthority(): void
-    {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::UNTRUSTED_TSA_TRUSTED_ROOT_FIXTURE);
-
-        $this->expectException(Rfc3161TimestampVerificationFailed::class);
-        $verifier->verify(
-            $this->loadFixtureBundle(self::UNTRUSTED_TSA_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
