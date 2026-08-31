@@ -15,6 +15,7 @@ use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
@@ -32,16 +33,13 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
-use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogKeyOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
-use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use Webmozart\Assert\Assert;
 
@@ -76,7 +74,6 @@ use function preg_replace;
 use function sodium_crypto_sign_verify_detached;
 use function str_replace;
 use function strlen;
-use function strtotime;
 use function substr;
 use function sys_get_temp_dir;
 use function tempnam;
@@ -94,14 +91,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    private const KEY_DETAILS_ECDSA_P256_SHA_256 = 'PKIX_ECDSA_P256_SHA_256';
-    private const KEY_DETAILS_ED25519            = 'PKIX_ED25519';
-
-    private const SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS = [
-        self::KEY_DETAILS_ECDSA_P256_SHA_256,
-        self::KEY_DETAILS_ED25519,
-    ];
-
     private const ED25519_SPKI_DER_PREFIX_LENGTH = 12;
     private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
 
@@ -117,21 +106,16 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */
     private const CT_PRECERT_SCTS_EXTENSION_OID_DER = "\x2b\x06\x01\x04\x01\xd6\x79\x02\x04\x02";
 
-    /** @var non-empty-string */
-    private string $trustedRootFilePath;
+    private TrustedRoot $trustedRoot;
 
     /** @var list<VerifyBundleCheck> */
     private array $checks;
 
-    /**
-     * @param non-empty-string        $trustedRootFilePath
-     * @param list<VerifyBundleCheck> $checks
-     */
-    public function __construct(string $trustedRootFilePath, array $checks)
+    /** @param list<VerifyBundleCheck> $checks */
+    public function __construct(TrustedRoot $trustedRoot, array $checks)
     {
-        Assert::fileExists($trustedRootFilePath);
-        $this->trustedRootFilePath = $trustedRootFilePath;
-        $this->checks              = $checks;
+        $this->trustedRoot = $trustedRoot;
+        $this->checks      = $checks;
     }
 
     public static function factory(): self
@@ -142,16 +126,19 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @param non-empty-string $trustedRootFilePath */
     public static function withTrustedRootFile(string $trustedRootFilePath): self
     {
-        return new self($trustedRootFilePath, self::defaultChecks());
+        $trustedRoot = new TrustedRoot($trustedRootFilePath);
+
+        return new self($trustedRoot, self::defaultChecks($trustedRoot));
     }
 
     /** @return list<VerifyBundleCheck> */
-    private static function defaultChecks(): array
+    private static function defaultChecks(TrustedRoot $trustedRoot): array
     {
         return [
             new BundleMediaTypeIsSupported(),
             new TransparencyLogEntriesHaveValidLogIndex(),
             new TransparencyLogEntriesAreWithinCertificateValidity(),
+            new TransparencyLogEntriesAreWithinTransparencyLogKeyValidity($trustedRoot),
         ];
     }
 
@@ -179,8 +166,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity($bundleIndex, $bundle);
-
             $this->assertRfc3161TimestampsAreValid($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesHaveValidInclusionProof($bundleIndex, $bundle);
@@ -207,30 +192,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
-            }
-        }
-    }
-
-    private function assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity(int $bundleIndex, Bundle $bundle): void
-    {
-        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            $integratedTime = $transparencyLogEntry->integratedTime();
-            if ($integratedTime === null) {
-                continue;
-            }
-
-            $validFor = $this->resolveTransparencyLogPublicKey($transparencyLogEntry->logId())['validFor'];
-
-            if (
-                $integratedTime < $validFor['start']
-                || ($validFor['end'] !== null && $integratedTime > $validFor['end'])
-            ) {
-                throw TransparencyLogKeyOutsideValidityPeriod::forIndex(
-                    $bundleIndex,
-                    $integratedTime,
-                    $validFor['start'],
-                    $validFor['end'],
-                );
             }
         }
     }
@@ -290,7 +251,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $timestampToken      = substr($outerContent, $statusInfoEnd);
         Assert::stringNotEmpty($timestampToken);
 
-        $candidates = $this->timestampAuthorityCandidates();
+        $candidates = $this->trustedRoot->timestampAuthorityCandidates();
 
         $allCandidateCertsPem = '';
         foreach ($candidates as $candidate) {
@@ -348,88 +309,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         }
 
         throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
-    }
-
-    /** @return list<array{certChainPem: non-empty-string, certChainDer: non-empty-list<non-empty-string>, validFor: array{start: int, end: int|null}}> */
-    private function timestampAuthorityCandidates(): array
-    {
-        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
-        Assert::stringNotEmpty($trustedRootCert);
-
-        $candidates = [];
-        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
-            if (
-                ! is_array($decoded)
-                || ! array_key_exists('timestampAuthorities', $decoded)
-                || ! is_array($decoded['timestampAuthorities'])
-            ) {
-                continue;
-            }
-
-            /** @var mixed $timestampAuthority */
-            foreach ($decoded['timestampAuthorities'] as $timestampAuthority) {
-                if (
-                    ! is_array($timestampAuthority)
-                    || ! array_key_exists('certChain', $timestampAuthority)
-                    || ! is_array($timestampAuthority['certChain'])
-                    || ! array_key_exists('certificates', $timestampAuthority['certChain'])
-                    || ! is_array($timestampAuthority['certChain']['certificates'])
-                    || ! array_key_exists('validFor', $timestampAuthority)
-                    || ! is_array($timestampAuthority['validFor'])
-                    || ! array_key_exists('start', $timestampAuthority['validFor'])
-                    || ! is_string($timestampAuthority['validFor']['start'])
-                    || $timestampAuthority['validFor']['start'] === ''
-                ) {
-                    continue;
-                }
-
-                $certChainPem = '';
-                $certChainDer = [];
-                /** @var mixed $certificateWrapper */
-                foreach ($timestampAuthority['certChain']['certificates'] as $certificateWrapper) {
-                    if (
-                        ! is_array($certificateWrapper)
-                        || ! array_key_exists('rawBytes', $certificateWrapper)
-                        || ! is_string($certificateWrapper['rawBytes'])
-                        || $certificateWrapper['rawBytes'] === ''
-                    ) {
-                        continue;
-                    }
-
-                    $certificate    = PemCertificate::fromBase64EncodedDerBytes($certificateWrapper['rawBytes']);
-                    $certChainPem  .= $certificate->decoratedCertificate();
-                    $certChainDer[] = $certificate->derEncodedBytes();
-                }
-
-                if ($certChainPem === '' || $certChainDer === []) {
-                    continue;
-                }
-
-                $validForStart = strtotime($timestampAuthority['validFor']['start']);
-                Assert::notFalse($validForStart);
-
-                $validForEnd = null;
-                if (
-                    array_key_exists('end', $timestampAuthority['validFor'])
-                    && $timestampAuthority['validFor']['end'] !== null
-                ) {
-                    Assert::stringNotEmpty($timestampAuthority['validFor']['end']);
-                    $validForEnd = strtotime($timestampAuthority['validFor']['end']);
-                    Assert::notFalse($validForEnd);
-                }
-
-                $candidates[] = [
-                    'certChainPem' => $certChainPem,
-                    'certChainDer' => $certChainDer,
-                    'validFor' => [
-                        'start' => $validForStart,
-                        'end' => $validForEnd,
-                    ],
-                ];
-            }
-        }
-
-        return $candidates;
     }
 
     /** @param non-empty-string $tstInfo */
@@ -550,7 +429,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 
             $parsedCheckpoint = $this->parseCheckpointEnvelope($bundleIndex, $checkpointEnvelope);
 
-            $transparencyLogKey = $this->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
+            $transparencyLogKey = $this->trustedRoot->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
 
             if (! hash_equals(substr($transparencyLogKey['keyId'], 0, 4), $parsedCheckpoint['keyHint'])) {
                 throw CheckpointKeyHintMismatch::forIndex($bundleIndex);
@@ -582,7 +461,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 continue;
             }
 
-            $transparencyLogKey = $this->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
+            $transparencyLogKey = $this->trustedRoot->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
 
             $signedContent = json_encode(
                 [
@@ -814,7 +693,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
      */
     private function verifyTransparencyLogSignature(array $transparencyLogKey, string $signedContent, string $signature): bool
     {
-        if ($transparencyLogKey['keyDetails'] === self::KEY_DETAILS_ED25519) {
+        if ($transparencyLogKey['keyDetails'] === TrustedRoot::KEY_DETAILS_ED25519) {
             return sodium_crypto_sign_verify_detached(
                 $signature,
                 $signedContent,
@@ -892,194 +771,16 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             Assert::stringNotEmpty($attestationCertificateInfo['issuer']);
         }
 
-        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
-        Assert::stringNotEmpty($trustedRootCert);
-
-        /**
-         * Now go through our trusted root certificates and attempt to verify that the certificate was signed by an
-         * in-date trusted root certificate. The root certificates should be periodically and frequently updated using:
-         *
-         *     gh attestation trusted-root > resources/trusted-root.jsonl
-         *
-         * And verifying the contents afterwards to ensure they have not been compromised. This list of JSON blobs may
-         * have multiple certificates (e.g. root certificates, intermediate certificates, expired certificates, etc.)
-         * so we should loop over to find the correct certificate used to sign the attestation certificate.
-         */
-        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
-            // No certificate authorities defined in this document, skip it...
-            if (
-                ! is_array($decoded)
-                || ! array_key_exists('certificateAuthorities', $decoded)
-                || ! is_array($decoded['certificateAuthorities'])
-            ) {
-                continue;
-            }
-
-            /** @var mixed $certificateAuthority */
-            foreach ($decoded['certificateAuthorities'] as $certificateAuthority) {
-                // We don't have a certificate chain defined, skip it...
-                if (
-                    ! is_array($certificateAuthority)
-                    || ! array_key_exists('certChain', $certificateAuthority)
-                    || ! is_array($certificateAuthority['certChain'])
-                    || ! array_key_exists('certificates', $certificateAuthority['certChain'])
-                    || ! is_array($certificateAuthority['certChain']['certificates'])
-                ) {
-                    continue;
-                }
-
-                /** @var mixed $caCertificateWrapper */
-                foreach ($certificateAuthority['certChain']['certificates'] as $caCertificateWrapper) {
-                    // Certificate is not in the expected format, i.e. no rawBytes key, skip it...
-                    if (
-                        ! is_array($caCertificateWrapper)
-                        || ! array_key_exists('rawBytes', $caCertificateWrapper)
-                        || ! is_string($caCertificateWrapper['rawBytes'])
-                        || $caCertificateWrapper['rawBytes'] === ''
-                    ) {
-                        continue;
-                    }
-
-                    $caCertificateString = PemCertificate::fromBase64EncodedDerBytes(
-                        $caCertificateWrapper['rawBytes'],
-                    )->decoratedCertificate();
-
-                    $caCertificateInfo = openssl_x509_parse($caCertificateString);
-                    Assert::isArray($caCertificateInfo);
-                    Assert::keyExists($caCertificateInfo, 'subject');
-
-                    // If the CA certificate subject is not the issuer of the attestation certificate,
-                    // this was not the cert we were looking for, skip it...
-                    if ($caCertificateInfo['subject'] !== $attestationCertificateInfo['issuer']) {
-                        continue;
-                    }
-
-                    // Finally, verify that the located CA cert was used to sign the attestation certificate
-                    if (openssl_x509_verify($bundle->certificate()->decoratedCertificate(), $caCertificateString) !== 1) {
-                        /** @psalm-suppress MixedArgument */
-                        throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
-                    }
-
-                    return;
-                }
-            }
+        $caCertificate = $this->trustedRoot->resolveCertificateAuthorityCertificate($attestationCertificateInfo['issuer']);
+        if ($caCertificate === null) {
+            /** @psalm-suppress MixedArgument */
+            throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
         }
 
-        /**
-         * If we got here, we skipped all the certificates in the trusted root collection for various reasons; so we
-         * therefore cannot trust the attestation certificate.
-         *
-         * @psalm-suppress MixedArgument
-         */
-        throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
-    }
-
-    /**
-     * The production trusted root (`resources/trusted-root.jsonl`) is genuinely JSON Lines: multiple
-     * complete documents, one per line. A custom `--trusted-root` file is a single JSON document that
-     * may be pretty-printed across many lines, so naively splitting on newlines would shred it. Try
-     * parsing the whole file as one document first, and only fall back to line-by-line JSONL parsing
-     * if that fails.
-     *
-     * @return list<mixed>
-     */
-    private function parseTrustedRootDocuments(string $trustedRootCert): array
-    {
-        /** @var mixed $wholeFileDecoded */
-        $wholeFileDecoded = json_decode(trim($trustedRootCert), true);
-        if (is_array($wholeFileDecoded)) {
-            return [$wholeFileDecoded];
+        if (openssl_x509_verify($bundle->certificate()->decoratedCertificate(), $caCertificate->decoratedCertificate()) !== 1) {
+            /** @psalm-suppress MixedArgument */
+            throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
         }
-
-        $documents = [];
-        foreach (explode("\n", trim($trustedRootCert)) as $jsonLine) {
-            $documents[] = json_decode($jsonLine, true);
-        }
-
-        return $documents;
-    }
-
-    /**
-     * @param non-empty-string $logId
-     *
-     * @return TransparencyLogKey
-     */
-    private function resolveTransparencyLogPublicKey(string $logId): array
-    {
-        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
-        Assert::stringNotEmpty($trustedRootCert);
-
-        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
-            // No transparency logs defined in this document, skip it...
-            if (
-                ! is_array($decoded)
-                || ! array_key_exists('tlogs', $decoded)
-                || ! is_array($decoded['tlogs'])
-            ) {
-                continue;
-            }
-
-            /** @var mixed $tlog */
-            foreach ($decoded['tlogs'] as $tlog) {
-                // Not in the expected shape, skip it...
-                if (
-                    ! is_array($tlog)
-                    || ! array_key_exists('logId', $tlog)
-                    || ! is_array($tlog['logId'])
-                    || ! array_key_exists('keyId', $tlog['logId'])
-                    || ! is_string($tlog['logId']['keyId'])
-                    || $tlog['logId']['keyId'] === ''
-                    || ! array_key_exists('publicKey', $tlog)
-                    || ! is_array($tlog['publicKey'])
-                    || ! array_key_exists('rawBytes', $tlog['publicKey'])
-                    || ! is_string($tlog['publicKey']['rawBytes'])
-                    || $tlog['publicKey']['rawBytes'] === ''
-                    || ! array_key_exists('keyDetails', $tlog['publicKey'])
-                    || ! is_string($tlog['publicKey']['keyDetails'])
-                    || $tlog['publicKey']['keyDetails'] === ''
-                ) {
-                    continue;
-                }
-
-                $tlogKeyId = base64_decode($tlog['logId']['keyId']);
-                if ($tlogKeyId === '' || ! hash_equals($logId, $tlogKeyId)) {
-                    continue;
-                }
-
-                if (! in_array($tlog['publicKey']['keyDetails'], self::SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS, true)) {
-                    throw UnsupportedTransparencyLogKeyAlgorithm::fromKeyDetails($tlog['publicKey']['keyDetails']);
-                }
-
-                Assert::keyExists($tlog['publicKey'], 'validFor');
-                Assert::isArray($tlog['publicKey']['validFor']);
-                Assert::keyExists($tlog['publicKey']['validFor'], 'start');
-                Assert::stringNotEmpty($tlog['publicKey']['validFor']['start']);
-                $validForStart = strtotime($tlog['publicKey']['validFor']['start']);
-                Assert::notFalse($validForStart);
-
-                $validForEnd = null;
-                if (
-                    array_key_exists('end', $tlog['publicKey']['validFor'])
-                    && $tlog['publicKey']['validFor']['end'] !== null
-                ) {
-                    Assert::stringNotEmpty($tlog['publicKey']['validFor']['end']);
-                    $validForEnd = strtotime($tlog['publicKey']['validFor']['end']);
-                    Assert::notFalse($validForEnd);
-                }
-
-                return [
-                    'publicKey' => PemPublicKey::fromBase64EncodedDerBytes($tlog['publicKey']['rawBytes']),
-                    'keyId' => $tlogKeyId,
-                    'keyDetails' => $tlog['publicKey']['keyDetails'],
-                    'validFor' => [
-                        'start' => $validForStart,
-                        'end' => $validForEnd,
-                    ],
-                ];
-            }
-        }
-
-        throw NoTransparencyLogKeyInTrustedRoot::fromLogId(bin2hex($logId));
     }
 
     private function assertCertificateHasATrustedSignedCertificateTimestamp(Bundle $bundle): void
@@ -1087,7 +788,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $logIds = $this->extractSignedCertificateTimestampLogIds($bundle->certificate()->derEncodedBytes());
 
         foreach ($logIds as $logId) {
-            if ($this->isCertificateTransparencyLogIdTrusted($logId)) {
+            if ($this->trustedRoot->isCertificateTransparencyLogIdTrusted($logId)) {
                 return;
             }
         }
@@ -1203,42 +904,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     }
 
     /** @param non-empty-string $logId */
-    private function isCertificateTransparencyLogIdTrusted(string $logId): bool
-    {
-        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
-        Assert::stringNotEmpty($trustedRootCert);
-
-        foreach ($this->parseTrustedRootDocuments($trustedRootCert) as $decoded) {
-            if (
-                ! is_array($decoded)
-                || ! array_key_exists('ctlogs', $decoded)
-                || ! is_array($decoded['ctlogs'])
-            ) {
-                continue;
-            }
-
-            /** @var mixed $ctlog */
-            foreach ($decoded['ctlogs'] as $ctlog) {
-                if (
-                    ! is_array($ctlog)
-                    || ! array_key_exists('logId', $ctlog)
-                    || ! is_array($ctlog['logId'])
-                    || ! array_key_exists('keyId', $ctlog['logId'])
-                    || ! is_string($ctlog['logId']['keyId'])
-                    || $ctlog['logId']['keyId'] === ''
-                ) {
-                    continue;
-                }
-
-                $ctlogKeyId = base64_decode($ctlog['logId']['keyId']);
-                if ($ctlogKeyId !== '' && hash_equals($logId, $ctlogKeyId)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
 
     /** @param array<non-empty-string, string> $extensions */
     private function assertCertificateExtensionClaims(Bundle $bundle, array $extensions): void

@@ -1,0 +1,1 @@
+{"mediaType":"application/vnd.dev.sigstore.trustedroot+json;version=0.1","tlogs":[{"baseUrl":"https://example.test","hashAlgorithm":"SHA2_256","publicKey":{"rawBytes":"bm90IGEgcmVhbCBrZXk=","keyDetails":"PKIX_RSA_PKCS1_SHA_256","validFor":{"start":"2021-01-01T00:00:00Z"}},"logId":{"keyId":"bm90IGEgcmVhbCBsb2cgaWQ="}}]}
