@@ -14,6 +14,7 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
@@ -24,7 +25,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerif
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
@@ -151,6 +151,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         return [
             new BundleMediaTypeIsSupported(),
             new TransparencyLogEntriesHaveValidLogIndex(),
+            new TransparencyLogEntriesAreWithinCertificateValidity(),
         ];
     }
 
@@ -177,8 +178,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             foreach ($this->checks as $check) {
                 $check->assert($file, $bundleIndex, $bundle);
             }
-
-            $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesAreWithinTransparencyLogKeyValidity($bundleIndex, $bundle);
 
@@ -208,41 +207,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
-            }
-        }
-    }
-
-    private function assertTransparencyLogEntriesAreWithinCertificateValidity(int $bundleIndex, Bundle $bundle): void
-    {
-        if ($bundle->transparencyLogEntries() === []) {
-            return;
-        }
-
-        $certificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
-        Assert::isArray($certificateInfo);
-        Assert::keyExists($certificateInfo, 'validFrom_time_t');
-        Assert::integer($certificateInfo['validFrom_time_t']);
-        Assert::keyExists($certificateInfo, 'validTo_time_t');
-        Assert::integer($certificateInfo['validTo_time_t']);
-
-        $certificateValidFrom = $certificateInfo['validFrom_time_t'];
-        $certificateValidTo   = $certificateInfo['validTo_time_t'];
-
-        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            if ($transparencyLogEntry->integratedTime() === null) {
-                continue;
-            }
-
-            if (
-                $transparencyLogEntry->integratedTime() < $certificateValidFrom
-                || $transparencyLogEntry->integratedTime() > $certificateValidTo
-            ) {
-                throw InvalidIntegratedTime::forIndex(
-                    $bundleIndex,
-                    $transparencyLogEntry->integratedTime(),
-                    $certificateValidFrom,
-                    $certificateValidTo,
-                );
             }
         }
     }

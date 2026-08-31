@@ -14,7 +14,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatc
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -49,8 +48,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT                  = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST           = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY      = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE    = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
-    private const UNTRUSTED_SA_CERTIFICATE_IDENTITY           = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
     private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE      = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
     private const INVALID_INCLUSION_PROOF_FIXTURE             = __DIR__ . '/../../fixture/invalid-inclusion-proof-fail.json';
     private const INCORRECT_PUBLIC_KEY_FIXTURE                = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
@@ -337,18 +334,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAnIntegratedTimeOutsideCertificateValidity(): void
-    {
-        $this->expectException(InvalidIntegratedTime::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::UNTRUSTED_SA_CERTIFICATE_IDENTITY,
         );
     }
 
