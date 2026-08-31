@@ -15,7 +15,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismat
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -50,7 +49,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT                  = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST           = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY      = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE           = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
     private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE    = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
     private const UNTRUSTED_SA_CERTIFICATE_IDENTITY           = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
     private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE      = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
@@ -336,18 +334,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->verifier->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithANegativeLogIndex(): void
-    {
-        $this->expectException(InvalidLogIndex::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,

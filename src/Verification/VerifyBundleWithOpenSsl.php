@@ -14,6 +14,7 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
@@ -24,7 +25,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidIntegratedTime;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
@@ -150,6 +150,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     {
         return [
             new BundleMediaTypeIsSupported(),
+            new TransparencyLogEntriesHaveValidLogIndex(),
         ];
     }
 
@@ -176,8 +177,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             foreach ($this->checks as $check) {
                 $check->assert($file, $bundleIndex, $bundle);
             }
-
-            $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesAreWithinCertificateValidity($bundleIndex, $bundle);
 
@@ -209,15 +208,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
-            }
-        }
-    }
-
-    private function assertTransparencyLogEntriesHaveValidLogIndex(int $bundleIndex, Bundle $bundle): void
-    {
-        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            if ($transparencyLogEntry->logIndex() < 0) {
-                throw InvalidLogIndex::forIndex($bundleIndex, $transparencyLogEntry->logIndex());
             }
         }
     }
