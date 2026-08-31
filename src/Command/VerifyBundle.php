@@ -73,7 +73,7 @@ class VerifyBundle extends Command
             $bundles = (new OnDiskBundle($bundle))->getBundles($file);
 
             $verifier = $trustedRoot !== null
-                ? new VerifyBundleWithOpenSsl($trustedRoot)
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot)
                 : VerifyBundleWithOpenSsl::factory();
 
             $verifier->verify(

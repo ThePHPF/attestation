@@ -24,7 +24,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerifica
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
@@ -54,7 +53,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const NEGATIVE_LOG_INDEX_BUNDLE_FIXTURE           = __DIR__ . '/../../fixture/bundle-negative-log-index-fail.json';
     private const INTEGRATED_TIME_IN_FUTURE_BUNDLE_FIXTURE    = __DIR__ . '/../../fixture/integrated-time-in-future-fail.json';
     private const UNTRUSTED_SA_CERTIFICATE_IDENTITY           = 'untrusted-sa@sigstore-conformance.iam.gserviceaccount.com';
-    private const UNKNOWN_VERSION_BUNDLE_FIXTURE              = __DIR__ . '/../../fixture/bundle-unknown-version-fail.json';
     private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE      = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
     private const INVALID_INCLUSION_PROOF_FIXTURE             = __DIR__ . '/../../fixture/invalid-inclusion-proof-fail.json';
     private const INCORRECT_PUBLIC_KEY_FIXTURE                = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
@@ -195,7 +193,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testSuccessfulVerificationOfAnEd25519CheckpointedTransparencyLogEntry(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
@@ -209,7 +207,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testRejectsAnEd25519CheckpointWithATamperedSignature(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
 
         $this->expectException(CheckpointSignatureVerificationFailed::class);
         $verifier->verify(
@@ -223,7 +221,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testSuccessfulVerificationWhenIntegratedTimeIsExactlyAtTheTransparencyLogKeysValidityEnd(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE);
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
@@ -237,7 +235,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testRejectsAnIntotoEntryWithAMismatchedSignature(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::INTOTO_LOG_ENTRY_MISMATCH_TRUSTED_ROOT);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INTOTO_LOG_ENTRY_MISMATCH_TRUSTED_ROOT);
 
         $this->expectException(TransparencyLogEntryContentMismatch::class);
         $verifier->verify(
@@ -251,7 +249,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testRejectsAnEntryMissingItsInclusionProof(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::INTOTO_MISSING_INCLUSION_PROOF_TRUSTED_ROOT);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INTOTO_MISSING_INCLUSION_PROOF_TRUSTED_ROOT);
 
         $this->expectException(InvalidMerkleInclusionProof::class);
         $verifier->verify(
@@ -265,7 +263,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testRejectsACertificateWhoseSignedCertificateTimestampReferencesAnUntrustedCtLog(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::INVALID_CT_KEY_TRUSTED_ROOT);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INVALID_CT_KEY_TRUSTED_ROOT);
 
         $this->expectException(UntrustedCertificateTransparencyLogKey::class);
         $verifier->verify(
@@ -279,7 +277,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testSuccessfulVerificationWhenRfc3161TimestampIsExactlyAtTheTimestampAuthoritysValidityEnd(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::TSA_VALIDITY_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::TSA_VALIDITY_TRUSTED_ROOT_FIXTURE);
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
@@ -293,7 +291,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     public function testRejectsAnRfc3161TimestampSignedByAnUntrustedTimestampAuthority(): void
     {
-        $verifier = new VerifyBundleWithOpenSsl(self::UNTRUSTED_TSA_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::UNTRUSTED_TSA_TRUSTED_ROOT_FIXTURE);
 
         $this->expectException(Rfc3161TimestampVerificationFailed::class);
         $verifier->verify(
@@ -365,18 +363,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
             'message-signature-artifact.txt',
             [],
             self::UNTRUSTED_SA_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAnUnsupportedMediaTypeVersion(): void
-    {
-        $this->expectException(UnsupportedBundleMediaType::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::UNKNOWN_VERSION_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 

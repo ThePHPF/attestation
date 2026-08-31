@@ -13,6 +13,8 @@ use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
+use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
@@ -39,7 +41,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertific
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogKeyOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
-use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaType;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use Webmozart\Assert\Assert;
@@ -93,13 +94,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    private const SUPPORTED_BUNDLE_MEDIA_TYPES = [
-        'application/vnd.dev.sigstore.bundle+json;version=0.1',
-        'application/vnd.dev.sigstore.bundle+json;version=0.2',
-        'application/vnd.dev.sigstore.bundle+json;version=0.3',
-        'application/vnd.dev.sigstore.bundle.v0.3+json',
-    ];
-
     private const KEY_DETAILS_ECDSA_P256_SHA_256 = 'PKIX_ECDSA_P256_SHA_256';
     private const KEY_DETAILS_ED25519            = 'PKIX_ED25519';
 
@@ -126,16 +120,37 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @var non-empty-string */
     private string $trustedRootFilePath;
 
-    /** @param non-empty-string $trustedRootFilePath */
-    public function __construct(string $trustedRootFilePath)
+    /** @var list<VerifyBundleCheck> */
+    private array $checks;
+
+    /**
+     * @param non-empty-string        $trustedRootFilePath
+     * @param list<VerifyBundleCheck> $checks
+     */
+    public function __construct(string $trustedRootFilePath, array $checks)
     {
         Assert::fileExists($trustedRootFilePath);
         $this->trustedRootFilePath = $trustedRootFilePath;
+        $this->checks              = $checks;
     }
 
     public static function factory(): self
     {
-        return new self(self::TRUSTED_ROOT_FILE_PATH);
+        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH);
+    }
+
+    /** @param non-empty-string $trustedRootFilePath */
+    public static function withTrustedRootFile(string $trustedRootFilePath): self
+    {
+        return new self($trustedRootFilePath, self::defaultChecks());
+    }
+
+    /** @return list<VerifyBundleCheck> */
+    private static function defaultChecks(): array
+    {
+        return [
+            new BundleMediaTypeIsSupported(),
+        ];
     }
 
     /** @inheritDoc */
@@ -158,7 +173,9 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
              *  - https://docs.sigstore.dev/logging/verify-release/
              *  - https://github.com/secure-systems-lab/dsse/blob/master/protocol.md#protocol
              */
-            $this->assertBundleMediaTypeIsSupported($bundle);
+            foreach ($this->checks as $check) {
+                $check->assert($file, $bundleIndex, $bundle);
+            }
 
             $this->assertTransparencyLogEntriesHaveValidLogIndex($bundleIndex, $bundle);
 
@@ -193,13 +210,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             } else {
                 throw UnsupportedBundleContent::new();
             }
-        }
-    }
-
-    private function assertBundleMediaTypeIsSupported(Bundle $bundle): void
-    {
-        if (! in_array($bundle->mediaType(), self::SUPPORTED_BUNDLE_MEDIA_TYPES, true)) {
-            throw UnsupportedBundleMediaType::fromMediaType($bundle->mediaType());
         }
     }
 
