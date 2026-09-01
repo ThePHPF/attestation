@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
-use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -121,9 +120,9 @@ class VerifyBundleWithOpenSslTest extends TestCase
         );
     }
 
-    public function testMessageSignatureBundleCannotBeVerifiedWithoutTheRealArtifact(): void
+    public function testMessageSignatureBundleCanBeVerifiedFromTheDigestAloneWithoutTheRealArtifact(): void
     {
-        $this->expectException(CannotVerifyMessageSignatureWithoutArtifact::class);
+        $this->expectNotToPerformAssertions();
         self::verifierForMessageSignatureFixtures()->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilenameAndChecksum(

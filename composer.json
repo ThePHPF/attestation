@@ -17,6 +17,7 @@
         "phpunit/phpunit": "^9.6.25"
     },
     "suggest": {
+        "ext-bcmath": "Needed to verify message-signature bundles when only a digest, not the real artifact, is available",
         "ext-openssl": "Needed to verify certificates using OpenSSL",
         "ext-snappy": "Decompress bundle attestations faster; if not, flow-php/snappy PHP fallback is used"
     },

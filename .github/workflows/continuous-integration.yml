@@ -31,7 +31,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-versions }}
-          extensions: intl, sodium, zip
+          extensions: bcmath, intl, sodium, zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v7
@@ -112,7 +112,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php-versions }}
-          extensions: intl, sodium, zip
+          extensions: bcmath, intl, sodium, zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/checkout@v7
@@ -123,27 +123,7 @@ jobs:
           skip-signing: "true"
           skip-result-upload: "true" # we can enable this when closer to completion
           xfail: |
-            test_verify[[]DIGEST-rekor2-timestamp-without-embedded-cert]
-            test_verify[[]DIGEST-rekor2-checkpoint-two-sigs-cosigned]
-            test_verify[[]DIGEST-rekor2-timestamp-with-expired-cert-chain]
-            test_verify[[]DIGEST-rekor2-checkpoint-multiple-cosigs]
-            test_verify[[]DIGEST-rekor2-happy-path]
-            test_verify[[]DIGEST-rekor2-checkpoint-cosigned]
-            test_verify[[]DIGEST-rekor2-checkpoint-two-sigs-from-origin]
-            test_verify[[]DIGEST-rekor2-checkpoint-origin-not-first]
-            test_verify[[]DIGEST-rekor2-timestamp-with-embedded-cert]
-
-            test_verify[[]DIGEST-trust-root-tsa-validity-end-inclusive]
-
-
             test_verify[[]PATH-managed-key-happy-path]
             test_verify[[]PATH-managed-key-and-trusted-root]
             test_verify[[]DIGEST-managed-key-happy-path]
             test_verify[[]DIGEST-managed-key-and-trusted-root]
-
-            test_verify[[]DIGEST-happy-path-v0.1]
-            test_verify[[]DIGEST-happy-path-v0.2]
-            test_verify[[]DIGEST-happy-path-v0.3]
-            test_verify[[]DIGEST-happy-path-v0.3-new-mediaType]
-            test_verify[[]DIGEST-bundle-with-sct-with-extensions]
-            test_verify[[]DIGEST-trust-root-tlog-validity-end-inclusive]

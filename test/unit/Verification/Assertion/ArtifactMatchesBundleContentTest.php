@@ -8,7 +8,6 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Assertion\ArtifactMatchesBundleContent;
-use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
@@ -149,9 +148,9 @@ final class ArtifactMatchesBundleContentTest extends TestCase
         );
     }
 
-    public function testRejectsAMessageSignatureWhenTheRealArtifactIsUnavailable(): void
+    public function testAcceptsAMessageSignatureVerifiedFromTheDigestAloneWhenTheRealArtifactIsUnavailable(): void
     {
-        $this->expectException(CannotVerifyMessageSignatureWithoutArtifact::class);
+        $this->expectNotToPerformAssertions();
         self::check()->assert(
             FilenameWithChecksum::fromFilenameAndChecksum(
                 'sha256:' . self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
@@ -159,6 +158,19 @@ final class ArtifactMatchesBundleContentTest extends TestCase
             ),
             0,
             self::bundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
+        );
+    }
+
+    public function testRejectsATamperedMessageSignatureWhenVerifiedFromTheDigestAlone(): void
+    {
+        $this->expectException(SignatureVerificationFailed::class);
+        self::check()->assert(
+            FilenameWithChecksum::fromFilenameAndChecksum(
+                'sha256:' . self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
+                self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
+            ),
+            0,
+            self::messageSignatureBundleWithTamperedSignature(),
         );
     }
 }

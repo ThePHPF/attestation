@@ -15,6 +15,7 @@ use function substr;
 final class Der
 {
     public const TAG_BOOLEAN            = 0x01;
+    public const TAG_INTEGER            = 0x02;
     public const TAG_OCTET_STRING       = 0x04;
     public const TAG_OBJECT_IDENTIFIER  = 0x06;
     public const TAG_GENERALIZED_TIME   = 0x18;

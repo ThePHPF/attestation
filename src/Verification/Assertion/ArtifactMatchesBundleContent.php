@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Verification\Assertion;
 
+use OpenSSLAsymmetricKey;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
@@ -12,9 +13,11 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
+use ThePhpFoundation\Attestation\Verification\Exception\NoBcmath;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
+use ThePhpFoundation\Attestation\Verification\RawEcdsaP256DigestVerifier;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -22,10 +25,12 @@ use function count;
 use function extension_loaded;
 use function file_get_contents;
 use function hash_equals;
+use function hex2bin;
 use function is_array;
 use function is_readable;
 use function is_string;
 use function json_decode;
+use function openssl_pkey_get_details;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 
@@ -67,25 +72,23 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
         }
     }
 
-    /**
-     * This requires the artifact on disk to verify the signature. A digest-only verification is specifically not
-     * supported, as there's nothing to verify against.
-     */
     private function verifyMessageSignature(int $bundleIndex, FilenameWithChecksum $file, PemCertificate $certificate, MessageSignature $content): void
     {
         if (! extension_loaded('openssl')) {
             throw NoOpenssl::new();
         }
 
+        $publicKey = openssl_pkey_get_public($certificate->decoratedCertificate());
+        Assert::notFalse($publicKey);
+
         if (! is_readable($file->filename())) {
-            throw CannotVerifyMessageSignatureWithoutArtifact::new();
+            $this->verifyMessageSignatureAgainstDigestAlone($bundleIndex, $file, $publicKey, $content);
+
+            return;
         }
 
         $artifactContents = file_get_contents($file->filename());
         Assert::stringNotEmpty($artifactContents);
-
-        $publicKey = openssl_pkey_get_public($certificate->decoratedCertificate());
-        Assert::notFalse($publicKey);
 
         if (
             openssl_verify(
@@ -95,6 +98,40 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
                 OPENSSL_ALGO_SHA256,
             ) !== 1
         ) {
+            throw SignatureVerificationFailed::forIndex($bundleIndex);
+        }
+    }
+
+    /**
+     * ext-openssl's openssl_verify() always hashes the message it's given internally, so it can't verify a
+     * signature against an already-computed digest when the real artifact isn't available (DIGEST mode).
+     * Falls back to raw ECDSA point arithmetic via ext-bcmath, which is optional (see composer.json).
+     */
+    private function verifyMessageSignatureAgainstDigestAlone(int $bundleIndex, FilenameWithChecksum $file, OpenSSLAsymmetricKey $publicKey, MessageSignature $content): void
+    {
+        if (! extension_loaded('bcmath')) {
+            throw NoBcmath::new();
+        }
+
+        $details = openssl_pkey_get_details($publicKey);
+        Assert::isArray($details);
+        Assert::keyExists($details, 'ec');
+        Assert::isArray($details['ec']);
+
+        if (! array_key_exists('curve_name', $details['ec']) || $details['ec']['curve_name'] !== 'prime256v1') {
+            throw CannotVerifyMessageSignatureWithoutArtifact::new();
+        }
+
+        Assert::keyExists($details['ec'], 'x');
+        Assert::stringNotEmpty($details['ec']['x']);
+        Assert::keyExists($details['ec'], 'y');
+        Assert::stringNotEmpty($details['ec']['y']);
+
+        $digest = hex2bin($file->checksum());
+        Assert::notFalse($digest);
+        Assert::stringNotEmpty($digest);
+
+        if (! RawEcdsaP256DigestVerifier::verify($digest, $content->signature(), $details['ec']['x'], $details['ec']['y'])) {
             throw SignatureVerificationFailed::forIndex($bundleIndex);
         }
     }

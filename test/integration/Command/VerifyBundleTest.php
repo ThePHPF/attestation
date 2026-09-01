@@ -72,7 +72,7 @@ final class VerifyBundleTest extends TestCase
         self::assertStringContainsString('Verified', $tester->getDisplay());
     }
 
-    public function testFailsWhenMessageSignatureBundleIsVerifiedInDigestMode(): void
+    public function testVerifiesAMessageSignatureBundleFromTheDigestAloneInDigestMode(): void
     {
         $tester = $this->commandTester();
 
@@ -83,8 +83,7 @@ final class VerifyBundleTest extends TestCase
             'artifact' => self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
         ]);
 
-        self::assertSame(Command::FAILURE, $statusCode);
-        self::assertStringContainsString('without the real artifact file', $tester->getDisplay());
+        self::assertSame(Command::SUCCESS, $statusCode);
     }
 
     public function testFailsWhenCertificateOidcIssuerDoesNotMatch(): void
