@@ -9,8 +9,6 @@ use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
-use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -133,17 +131,5 @@ class VerifyBundleWithOpenSslTest extends TestCase
                 self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
             ),
         );
-    }
-
-    public function testDsseEnvelopeSignatureVerificationFailed(): void
-    {
-        $this->expectException(SignatureVerificationFailed::class);
-        self::markTestIncomplete();
-    }
-
-    public function testDigestMismatchInAttestation(): void
-    {
-        $this->expectException(DigestMismatch::class);
-        self::markTestIncomplete();
     }
 }

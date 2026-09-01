@@ -29,19 +29,16 @@ try {
     $bundles = DownloadGitHubBundle::factory('your-org') // the org/user in your GH URL, e.g. https://github.com/your-org
         ->getBundles($file);
 
-    VerifyBundleWithOpenSsl::factory()
-        ->verify(
-            $bundles,
-            $file,
-            'the-filename', // the filename of the subject when it was built
-            [
-                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
-            ],
-            // the workflow that's expected to have produced the signing certificate
-            'https://github.com/your-org/your-repo/.github/workflows/build.yml@refs/heads/main',
-        );
+    VerifyBundleWithOpenSsl::factory(
+        [
+            FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
+            FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
+            FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
+        ],
+        // the workflow that's expected to have produced the signing certificate
+        'https://github.com/your-org/your-repo/.github/workflows/build.yml@refs/heads/main',
+    )
+        ->verify($bundles, $file);
 } catch (AttestationException $issue) {
     // Handle a failure to fetch or verify the attestation in the way you see fit...
 }
