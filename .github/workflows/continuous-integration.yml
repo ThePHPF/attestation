@@ -92,6 +92,7 @@ jobs:
       - run: |
           ./bin/cli.php verify-bundle \
             --bundle=test/fixture/bundle.json \
+            --certificate-identity=https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0 \
             --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
             test/fixture/pie.phar
 
