@@ -6,6 +6,7 @@ namespace ThePhpFoundation\Attestation\Verification;
 
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Assertion\ArtifactMatchesBundleContent;
+use ThePhpFoundation\Attestation\Verification\Assertion\BundleHasAtLeastOneTimestamp;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateExtensionClaims;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSignedCertificateTimestamp;
@@ -59,6 +60,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     {
         return [
             new BundleMediaTypeIsSupported(),
+            new BundleHasAtLeastOneTimestamp(),
             new TransparencyLogEntriesHaveValidLogIndex(),
             new TransparencyLogEntriesAreWithinCertificateValidity(),
             new TransparencyLogEntriesAreWithinTransparencyLogKeyValidity($trustedRoot),

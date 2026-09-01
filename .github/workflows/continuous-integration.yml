@@ -148,7 +148,6 @@ jobs:
             test_verify[[]DIGEST-bundle-with-sct-with-extensions]
             test_verify[[]DIGEST-trust-root-tlog-validity-end-inclusive]
 
-            test_verify[[]PATH-rekor2-no-timestamp_fail]
             test_verify[[]PATH-rekor2-dsse-mismatch-sig_fail]
             test_verify[[]PATH-rekor2-dsse-mismatch-envelope_fail]
             test_verify[[]DIGEST-rekor2-dsse-mismatch-sig_fail]
