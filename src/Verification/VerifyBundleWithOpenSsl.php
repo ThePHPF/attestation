@@ -57,19 +57,32 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         $this->checks = $checks;
     }
 
-    public static function factory(): self
+    /**
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     */
+    public static function factory(array $extensions, string $expectedCertificateIdentity): self
     {
-        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH);
+        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity);
     }
 
-    /** @param non-empty-string $trustedRootFilePath */
-    public static function withTrustedRootFile(string $trustedRootFilePath): self
+    /**
+     * @param non-empty-string                $trustedRootFilePath
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     */
+    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity): self
     {
-        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath)));
+        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity));
     }
 
-    /** @return list<VerifyBundleCheck> */
-    private static function defaultChecks(TrustedRoot $trustedRoot): array
+    /**
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     *
+     * @return list<VerifyBundleCheck>
+     */
+    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity): array
     {
         return [
             new BundleMediaTypeIsSupported(),
@@ -83,17 +96,14 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesMatchBundleContent(),
             new CertificateSignedByTrustedRoot($trustedRoot),
             new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot),
+            new CertificateExtensionClaims($extensions),
+            new CertificateIdentity($expectedCertificateIdentity),
         ];
     }
 
     /** @inheritDoc */
-    public function verify(
-        array $bundles,
-        FilenameWithChecksum $file,
-        ?string $expectedSubjectName,
-        array $extensionsToVerify,
-        string $expectedCertificateIdentity
-    ): void {
+    public function verify(array $bundles, FilenameWithChecksum $file): void
+    {
         foreach ($bundles as $bundleIndex => $bundle) {
             /**
              * Useful references. Whilst we don't do the full verification that
@@ -109,10 +119,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             foreach ($this->checks as $check) {
                 $check->assert($file, $bundleIndex, $bundle);
             }
-
-            (new CertificateExtensionClaims($extensionsToVerify))->assert($file, $bundleIndex, $bundle);
-
-            (new CertificateIdentity($expectedCertificateIdentity))->assert($file, $bundleIndex, $bundle);
 
             if ($bundle->content() instanceof DsseEnvelope) {
                 $this->assertDigestFromAttestationMatchesActual($file, $bundle->content());

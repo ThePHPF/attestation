@@ -17,7 +17,6 @@ use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
-use function basename;
 use function sprintf;
 use function str_starts_with;
 use function strlen;
@@ -58,31 +57,23 @@ class VerifyBundle extends Command
             $checksum = substr($artifact, strlen(self::SHA256_PREFIX));
             Assert::stringNotEmpty($checksum);
 
-            $file                = FilenameWithChecksum::fromFilenameAndChecksum($artifact, $checksum);
-            $expectedSubjectName = null;
+            $file = FilenameWithChecksum::fromFilenameAndChecksum($artifact, $checksum);
         } else {
             Assert::fileExists($artifact);
-            $file                = FilenameWithChecksum::fromFilename($artifact);
-            $expectedSubjectName = basename($artifact);
-            Assert::stringNotEmpty($expectedSubjectName);
+            $file = FilenameWithChecksum::fromFilename($artifact);
         }
 
         $output->writeln(sprintf('Verifying bundle <info>%s</info> for <info>%s</info>...', $bundle, $artifact));
 
         try {
-            $bundles = (new OnDiskBundle($bundle))->getBundles($file);
+            $bundles    = (new OnDiskBundle($bundle))->getBundles($file);
+            $extensions = [FulcioSigstoreOidExtensions::ISSUER_V2 => $certificateOidcIssuer];
 
             $verifier = $trustedRoot !== null
-                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot)
-                : VerifyBundleWithOpenSsl::factory();
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, $extensions, $certificateIdentity)
+                : VerifyBundleWithOpenSsl::factory($extensions, $certificateIdentity);
 
-            $verifier->verify(
-                $bundles,
-                $file,
-                $expectedSubjectName,
-                [FulcioSigstoreOidExtensions::ISSUER_V2 => $certificateOidcIssuer],
-                $certificateIdentity,
-            );
+            $verifier->verify($bundles, $file);
         } catch (AttestationException $failure) {
             $output->writeln(sprintf('❌ %s', $failure->getMessage()));
 

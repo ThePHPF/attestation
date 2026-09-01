@@ -34,13 +34,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
-    private VerifyBundleWithOpenSsl $verifier;
-
-    public function setUp(): void
-    {
-        $this->verifier = VerifyBundleWithOpenSsl::factory();
-    }
-
     /** @return non-empty-list<Bundle> */
     private function loadFixtureBundle(string $path): array
     {
@@ -53,13 +46,14 @@ class VerifyBundleWithOpenSslTest extends TestCase
         return [Bundle::fromBundle($decoded)];
     }
 
+    private static function verifierForMessageSignatureFixtures(): VerifyBundleWithOpenSsl
+    {
+        return VerifyBundleWithOpenSsl::factory([], self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY);
+    }
+
     public function testSuccessfulVerification(): void
     {
-        $this->expectNotToPerformAssertions();
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'pie.phar',
+        $verifier = VerifyBundleWithOpenSsl::factory(
             [
                 FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
                 FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
@@ -67,74 +61,77 @@ class VerifyBundleWithOpenSslTest extends TestCase
             ],
             self::CERTIFICATE_IDENTITY,
         );
+
+        $this->expectNotToPerformAssertions();
+        $verifier->verify(
+            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
+        );
     }
 
     public function testSuccessfulVerificationOfAMessageSignatureBundle(): void
     {
         $this->expectNotToPerformAssertions();
-        $this->verifier->verify(
+        self::verifierForMessageSignatureFixtures()->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 
     public function testSuccessfulVerificationOfAnEd25519CheckpointedTransparencyLogEntry(): void
     {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(
+            self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE,
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 
     public function testSuccessfulVerificationWhenIntegratedTimeIsExactlyAtTheTransparencyLogKeysValidityEnd(): void
     {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(
+            self::TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE,
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::TLOG_KEY_VALIDITY_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 
     public function testSuccessfulVerificationWhenRfc3161TimestampIsExactlyAtTheTimestampAuthoritysValidityEnd(): void
     {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::TSA_VALIDITY_TRUSTED_ROOT_FIXTURE);
+        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(
+            self::TSA_VALIDITY_TRUSTED_ROOT_FIXTURE,
+            [],
+            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
+        );
 
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::TSA_VALIDITY_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 
     public function testMessageSignatureBundleCannotBeVerifiedWithoutTheRealArtifact(): void
     {
         $this->expectException(CannotVerifyMessageSignatureWithoutArtifact::class);
-        $this->verifier->verify(
+        self::verifierForMessageSignatureFixtures()->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilenameAndChecksum(
                 'sha256:' . self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
                 self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
             ),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
         );
     }
 

@@ -11,18 +11,9 @@ use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 interface VerifyBundle
 {
     /**
-     * @param non-empty-list<Bundle>          $bundles
-     * @param non-empty-string|null           $expectedSubjectName
-     * @param array<non-empty-string, string> $extensionsToVerify
-     * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-list<Bundle> $bundles
      *
      * @throws FailedToVerifyArtifact
      */
-    public function verify(
-        array $bundles,
-        FilenameWithChecksum $file,
-        ?string $expectedSubjectName,
-        array $extensionsToVerify,
-        string $expectedCertificateIdentity
-    ): void;
+    public function verify(array $bundles, FilenameWithChecksum $file): void;
 }
