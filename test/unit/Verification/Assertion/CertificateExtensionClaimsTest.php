@@ -54,4 +54,12 @@ final class CertificateExtensionClaimsTest extends TestCase
         $this->expectException(MismatchingExtensionValues::class);
         $check->assert(FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'), 0, self::bundle());
     }
+
+    public function testRejectsAnExtensionThatIsEntirelyMissingFromTheCertificate(): void
+    {
+        $check = new CertificateExtensionClaims(['1.2.3.4.5.6.7.8.9' => 'irrelevant']);
+
+        $this->expectException(MismatchingExtensionValues::class);
+        $check->assert(FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'), 0, self::bundle());
+    }
 }

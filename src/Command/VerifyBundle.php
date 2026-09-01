@@ -13,7 +13,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 use ThePhpFoundation\Attestation\AttestationException;
 use ThePhpFoundation\Attestation\BundleSource\OnDiskBundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -66,12 +65,11 @@ class VerifyBundle extends Command
         $output->writeln(sprintf('Verifying bundle <info>%s</info> for <info>%s</info>...', $bundle, $artifact));
 
         try {
-            $bundles    = (new OnDiskBundle($bundle))->getBundles($file);
-            $extensions = [FulcioSigstoreOidExtensions::ISSUER_V2 => $certificateOidcIssuer];
+            $bundles = (new OnDiskBundle($bundle))->getBundles($file);
 
             $verifier = $trustedRoot !== null
-                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, $extensions, $certificateIdentity)
-                : VerifyBundleWithOpenSsl::factory($extensions, $certificateIdentity);
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer)
+                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer);
 
             $verifier->verify($bundles, $file);
         } catch (AttestationException $failure) {

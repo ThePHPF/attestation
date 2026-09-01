@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupport
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateExtensionClaims;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSignedCertificateTimestamp;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateIdentity;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateOidcIssuer;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
@@ -34,29 +35,32 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /**
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
      */
-    public static function factory(array $extensions, string $expectedCertificateIdentity): self
+    public static function factory(array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
     {
-        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity);
+        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity, $expectedOidcIssuer);
     }
 
     /**
      * @param non-empty-string                $trustedRootFilePath
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
      */
-    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity): self
+    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
     {
-        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity));
+        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity, $expectedOidcIssuer));
     }
 
     /**
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
      *
      * @return list<VerifyBundleCheck>
      */
-    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity): array
+    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): array
     {
         return [
             new BundleMediaTypeIsSupported(),
@@ -72,6 +76,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new CertificateSignedByTrustedRoot($trustedRoot),
             new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot),
             new CertificateExtensionClaims($extensions),
+            new CertificateOidcIssuer($expectedOidcIssuer),
             new CertificateIdentity($expectedCertificateIdentity),
             new ArtifactMatchesBundleContent(),
         ];

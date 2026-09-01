@@ -10,6 +10,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringL
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use Webmozart\Assert\Assert;
 
+use function array_key_exists;
 use function openssl_x509_parse;
 use function ord;
 use function strlen;
@@ -37,7 +38,10 @@ final class CertificateExtensionClaims implements VerifyBundleCheck
          * to change unless the namespace/repo name change, etc.
          */
         foreach ($this->extensions as $extension => $expectedValue) {
-            Assert::keyExists($attestationCertificateInfo['extensions'], $extension);
+            if (! array_key_exists($extension, $attestationCertificateInfo['extensions'])) {
+                throw MismatchingExtensionValues::from($extension, $expectedValue, '(missing)');
+            }
+
             Assert::stringNotEmpty($attestationCertificateInfo['extensions'][$extension]);
             $actualValue = $attestationCertificateInfo['extensions'][$extension];
 
