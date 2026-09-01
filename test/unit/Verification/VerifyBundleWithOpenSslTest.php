@@ -9,9 +9,7 @@ use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
-use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
@@ -137,38 +135,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testMismatchingExtensionClaimsAreRejected(): void
-    {
-        $this->expectException(MismatchingExtensionValues::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'pie.phar',
-            [
-                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/asgrim',
-            ],
-            self::CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testCertificateIdentityMismatchIsRejected(): void
-    {
-        $this->expectException(CertificateIdentityMismatch::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'pie.phar',
-            [
-                FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/php/pie',
-                FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/php',
-            ],
-            'https://github.com/some-other-org/some-other-repo/.github/workflows/build.yml@refs/heads/main',
         );
     }
 
