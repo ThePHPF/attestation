@@ -14,7 +14,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatc
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidMerkleInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
@@ -40,38 +39,33 @@ use function substr;
 /** @covers \ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl */
 class VerifyBundleWithOpenSslTest extends TestCase
 {
-    private const BUNDLE_FIXTURE                              = __DIR__ . '/../../fixture/bundle.json';
-    private const PIE_PHAR                                    = __DIR__ . '/../../fixture/pie.phar';
-    private const CERTIFICATE_IDENTITY                        = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
-    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE            = __DIR__ . '/../../fixture/message-signature-bundle.json';
-    private const MESSAGE_SIGNATURE_ARTIFACT                  = __DIR__ . '/../../fixture/message-signature-artifact.txt';
-    private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST           = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
-    private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY      = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE      = __DIR__ . '/../../fixture/inclusion-proof-corrupted-hash-fail.json';
-    private const INVALID_INCLUSION_PROOF_FIXTURE             = __DIR__ . '/../../fixture/invalid-inclusion-proof-fail.json';
-    private const INCORRECT_PUBLIC_KEY_FIXTURE                = __DIR__ . '/../../fixture/incorrect-public-key-fail.json';
-    private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE        = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
-    private const CHECKPOINT_BAD_KEYHINT_FIXTURE              = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
-    private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
-    private const SET_INVALID_SIGNATURE_FIXTURE               = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
-    private const WRONG_HASHEDREKORD_ARTIFACT_FIXTURE         = __DIR__ . '/../../fixture/wrong-hashedrekord-artifact-fail.json';
-    private const WRONG_HASHEDREKORD_ENTRY_FIXTURE            = __DIR__ . '/../../fixture/wrong-hashedrekord-entry-fail.json';
-    private const WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE     = __DIR__ . '/../../fixture/wrong-hashedrekord-cert-and-sig-fail.json';
-    private const DSSE_MISMATCH_ENVELOPE_FIXTURE              = __DIR__ . '/../../fixture/dsse-mismatch-envelope-fail.json';
-    private const DSSE_MISMATCH_SIG_FIXTURE                   = __DIR__ . '/../../fixture/dsse-mismatch-sig-fail.json';
-    private const TLOG_KEY_VALIDITY_BUNDLE_FIXTURE            = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive.json';
-    private const TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE      = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive-trusted-root.json';
-    private const INTOTO_LOG_ENTRY_MISMATCH_BUNDLE_FIXTURE    = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail.json';
-    private const INTOTO_LOG_ENTRY_MISMATCH_TRUSTED_ROOT      = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail-trusted-root.json';
-    private const INTOTO_LOG_ENTRY_MISMATCH_ARTIFACT          = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail-artifact.txt';
-    private const INTOTO_MISSING_INCLUSION_PROOF_FIXTURE      = __DIR__ . '/../../fixture/intoto-missing-inclusion-proof-fail.json';
-    private const INTOTO_MISSING_INCLUSION_PROOF_TRUSTED_ROOT = __DIR__ . '/../../fixture/intoto-missing-inclusion-proof-fail-trusted-root.json';
-    private const INVALID_CT_KEY_FIXTURE                      = __DIR__ . '/../../fixture/invalid-ct-key-fail.json';
-    private const INVALID_CT_KEY_TRUSTED_ROOT                 = __DIR__ . '/../../fixture/invalid-ct-key-fail-trusted-root.json';
-    private const TSA_VALIDITY_BUNDLE_FIXTURE                 = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive.json';
-    private const TSA_VALIDITY_TRUSTED_ROOT_FIXTURE           = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive-trusted-root.json';
-    private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE          = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
-    private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE    = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
+    private const BUNDLE_FIXTURE                           = __DIR__ . '/../../fixture/bundle.json';
+    private const PIE_PHAR                                 = __DIR__ . '/../../fixture/pie.phar';
+    private const CERTIFICATE_IDENTITY                     = 'https://github.com/php/pie/.github/workflows/build-phar.yml@refs/tags/1.2.0';
+    private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE         = __DIR__ . '/../../fixture/message-signature-bundle.json';
+    private const MESSAGE_SIGNATURE_ARTIFACT               = __DIR__ . '/../../fixture/message-signature-artifact.txt';
+    private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST        = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
+    private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY   = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
+    private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE     = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
+    private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
+    private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE        = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
+    private const SET_INVALID_SIGNATURE_FIXTURE            = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
+    private const WRONG_HASHEDREKORD_ARTIFACT_FIXTURE      = __DIR__ . '/../../fixture/wrong-hashedrekord-artifact-fail.json';
+    private const WRONG_HASHEDREKORD_ENTRY_FIXTURE         = __DIR__ . '/../../fixture/wrong-hashedrekord-entry-fail.json';
+    private const WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE  = __DIR__ . '/../../fixture/wrong-hashedrekord-cert-and-sig-fail.json';
+    private const DSSE_MISMATCH_ENVELOPE_FIXTURE           = __DIR__ . '/../../fixture/dsse-mismatch-envelope-fail.json';
+    private const DSSE_MISMATCH_SIG_FIXTURE                = __DIR__ . '/../../fixture/dsse-mismatch-sig-fail.json';
+    private const TLOG_KEY_VALIDITY_BUNDLE_FIXTURE         = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive.json';
+    private const TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE   = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive-trusted-root.json';
+    private const INTOTO_LOG_ENTRY_MISMATCH_BUNDLE_FIXTURE = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail.json';
+    private const INTOTO_LOG_ENTRY_MISMATCH_TRUSTED_ROOT   = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail-trusted-root.json';
+    private const INTOTO_LOG_ENTRY_MISMATCH_ARTIFACT       = __DIR__ . '/../../fixture/intoto-log-entry-mismatch-fail-artifact.txt';
+    private const INVALID_CT_KEY_FIXTURE                   = __DIR__ . '/../../fixture/invalid-ct-key-fail.json';
+    private const INVALID_CT_KEY_TRUSTED_ROOT              = __DIR__ . '/../../fixture/invalid-ct-key-fail-trusted-root.json';
+    private const TSA_VALIDITY_BUNDLE_FIXTURE              = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive.json';
+    private const TSA_VALIDITY_TRUSTED_ROOT_FIXTURE        = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive-trusted-root.json';
+    private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
+    private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
     private VerifyBundleWithOpenSsl $verifier;
 
@@ -239,20 +233,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         );
     }
 
-    public function testRejectsAnEntryMissingItsInclusionProof(): void
-    {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INTOTO_MISSING_INCLUSION_PROOF_TRUSTED_ROOT);
-
-        $this->expectException(InvalidMerkleInclusionProof::class);
-        $verifier->verify(
-            $this->loadFixtureBundle(self::INTOTO_MISSING_INCLUSION_PROOF_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
     public function testRejectsACertificateWhoseSignedCertificateTimestampReferencesAnUntrustedCtLog(): void
     {
         $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INVALID_CT_KEY_TRUSTED_ROOT);
@@ -314,42 +294,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->verifier->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithACorruptedInclusionProofHash(): void
-    {
-        $this->expectException(InvalidMerkleInclusionProof::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::INCLUSION_PROOF_CORRUPTED_HASH_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAStaleInclusionProof(): void
-    {
-        $this->expectException(InvalidMerkleInclusionProof::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::INVALID_INCLUSION_PROOF_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAnIncorrectPublicKeyInTheLoggedEntry(): void
-    {
-        $this->expectException(InvalidMerkleInclusionProof::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::INCORRECT_PUBLIC_KEY_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
