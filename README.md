@@ -1,14 +1,8 @@
 # Attestation
 
 A PHP library to aid in verifying artifact attestations. This tool will carry
-out some basic verifications that the given file is genuine. The checks it
-carries out are:
-
- * Verifies the attestation certificate was signed by a trusted root
- * Verifies the given OID extensions match what you expect
- * Verifies the certificate's signer identity (subjectAltName) matches what you expect
- * Checks the digest in the attestation record matches the actual file given
- * Verifies the DSSE envelope signature
+out some basic verifications that the given file is genuine. At this time,
+the library does not support signing artifacts.
 
 ## Library usage
 
@@ -31,12 +25,13 @@ try {
 
     VerifyBundleWithOpenSsl::factory(
         [
-            FulcioSigstoreOidExtensions::ISSUER_V2 => 'https://token.actions.githubusercontent.com',
             FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_URI => 'https://github.com/your-org/your-repo',
             FulcioSigstoreOidExtensions::SOURCE_REPOSITORY_OWNER_URI => 'https://github.com/your-org',
         ],
         // the workflow that's expected to have produced the signing certificate
         'https://github.com/your-org/your-repo/.github/workflows/build.yml@refs/heads/main',
+        // the expected issuer of the signing certificate
+        'https://token.actions.githubusercontent.com',
     )
         ->verify($bundles, $file);
 } catch (AttestationException $issue) {
