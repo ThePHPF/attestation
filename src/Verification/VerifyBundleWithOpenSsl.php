@@ -9,22 +9,18 @@ use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
-use ThePhpFoundation\Attestation\PemPublicKey;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidCheckpoints;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidCheckpointFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
@@ -40,8 +36,6 @@ use Webmozart\Assert\Assert;
 
 use function array_key_exists;
 use function array_map;
-use function array_search;
-use function array_slice;
 use function base64_decode;
 use function base64_encode;
 use function bin2hex;
@@ -51,7 +45,6 @@ use function extension_loaded;
 use function file_get_contents;
 use function hash;
 use function hash_equals;
-use function implode;
 use function in_array;
 use function is_array;
 use function is_readable;
@@ -63,7 +56,6 @@ use function openssl_verify;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 use function ord;
-use function sodium_crypto_sign_verify_detached;
 use function strlen;
 use function substr;
 use function trim;
@@ -71,13 +63,9 @@ use function trim;
 use const JSON_UNESCAPED_SLASHES;
 use const OPENSSL_ALGO_SHA256;
 
-/** @phpstan-type TransparencyLogKey array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}} */
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
-
-    private const ED25519_SPKI_DER_PREFIX_LENGTH = 12;
-    private const ED25519_RAW_PUBLIC_KEY_LENGTH  = 32;
 
     private const HASHEDREKORD_VERSION_0_0_2 = '0.0.2';
 
@@ -119,6 +107,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesAreWithinTransparencyLogKeyValidity($trustedRoot),
             new Rfc3161TimestampsAreValid($trustedRoot),
             new TransparencyLogEntriesHaveValidInclusionProof(),
+            new TransparencyLogEntriesHaveValidCheckpoints($trustedRoot),
         ];
     }
 
@@ -146,8 +135,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertTransparencyLogEntriesHaveValidCheckpoints($bundleIndex, $bundle);
-
             $this->assertTransparencyLogEntriesHaveValidSignedEntryTimestamps($bundleIndex, $bundle);
 
             $this->assertTransparencyLogEntriesMatchBundleContent($bundleIndex, $bundle, $file);
@@ -168,47 +155,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
-            }
-        }
-    }
-
-    /**
-     * @link https://github.com/sigstore/rekor/blob/main/pkg/util/checkpoint.go
-     * @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go
-     */
-    private function assertTransparencyLogEntriesHaveValidCheckpoints(int $bundleIndex, Bundle $bundle): void
-    {
-        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            $inclusionProof = $transparencyLogEntry->inclusionProof();
-            if ($inclusionProof === null) {
-                continue;
-            }
-
-            $checkpointEnvelope = $inclusionProof->checkpointEnvelope();
-            if ($checkpointEnvelope === null) {
-                continue;
-            }
-
-            $parsedCheckpoint = $this->parseCheckpointEnvelope($bundleIndex, $checkpointEnvelope);
-
-            $transparencyLogKey = $this->trustedRoot->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
-
-            if (! hash_equals(substr($transparencyLogKey['keyId'], 0, 4), $parsedCheckpoint['keyHint'])) {
-                throw CheckpointKeyHintMismatch::forIndex($bundleIndex);
-            }
-
-            if (
-                ! $this->verifyTransparencyLogSignature(
-                    $transparencyLogKey,
-                    $parsedCheckpoint['noteText'],
-                    $parsedCheckpoint['signature'],
-                )
-            ) {
-                throw CheckpointSignatureVerificationFailed::forIndex($bundleIndex);
-            }
-
-            if (! hash_equals($inclusionProof->rootHash(), $parsedCheckpoint['rootHash'])) {
-                throw CheckpointRootHashMismatch::forIndex($bundleIndex);
             }
         }
     }
@@ -236,7 +182,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             );
             Assert::stringNotEmpty($signedContent);
 
-            if (! $this->verifyTransparencyLogSignature($transparencyLogKey, $signedContent, $signedEntryTimestamp)) {
+            if (! TransparencyLogSignature::verify($transparencyLogKey, $signedContent, $signedEntryTimestamp)) {
                 throw SignedEntryTimestampVerificationFailed::forIndex($bundleIndex);
             }
         }
@@ -433,80 +379,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
         if (! hash_equals($certificate->derEncodedBytes(), Der::bytesFromPem($entryCertificatePem))) {
             throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
         }
-    }
-
-    /**
-     * @param TransparencyLogKey $transparencyLogKey
-     * @param non-empty-string   $signedContent
-     * @param non-empty-string   $signature
-     */
-    private function verifyTransparencyLogSignature(array $transparencyLogKey, string $signedContent, string $signature): bool
-    {
-        if ($transparencyLogKey['keyDetails'] === TrustedRoot::KEY_DETAILS_ED25519) {
-            return sodium_crypto_sign_verify_detached(
-                $signature,
-                $signedContent,
-                $this->extractRawEd25519PublicKey($transparencyLogKey['publicKey']),
-            );
-        }
-
-        $publicKey = openssl_pkey_get_public($transparencyLogKey['publicKey']->decoratedPublicKey());
-        Assert::notFalse($publicKey);
-
-        return openssl_verify($signedContent, $signature, $publicKey, OPENSSL_ALGO_SHA256) === 1;
-    }
-
-    /** @return non-empty-string */
-    private function extractRawEd25519PublicKey(PemPublicKey $publicKey): string
-    {
-        $derEncodedBytes = $publicKey->derEncodedBytes();
-        Assert::same(strlen($derEncodedBytes), self::ED25519_SPKI_DER_PREFIX_LENGTH + self::ED25519_RAW_PUBLIC_KEY_LENGTH);
-
-        return substr($derEncodedBytes, -self::ED25519_RAW_PUBLIC_KEY_LENGTH);
-    }
-
-    /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string, rootHash: non-empty-string} */
-    private function parseCheckpointEnvelope(int $bundleIndex, string $envelope): array
-    {
-        $lines          = explode("\n", $envelope);
-        $blankLineIndex = array_search('', $lines, true);
-
-        if (
-            $blankLineIndex === false
-            || ! isset($lines[$blankLineIndex + 1])
-            || $lines[$blankLineIndex + 1] === ''
-            || ! isset($lines[2])
-            || $lines[2] === ''
-        ) {
-            throw InvalidCheckpointFormat::forIndex($bundleIndex);
-        }
-
-        $noteText = implode("\n", array_slice($lines, 0, $blankLineIndex)) . "\n";
-
-        $signatureLineParts = explode(' ', $lines[$blankLineIndex + 1], 3);
-        if (count($signatureLineParts) !== 3) {
-            throw InvalidCheckpointFormat::forIndex($bundleIndex);
-        }
-
-        $signatureBlob = base64_decode($signatureLineParts[2]);
-        if ($signatureBlob === '' || strlen($signatureBlob) <= 4) {
-            throw InvalidCheckpointFormat::forIndex($bundleIndex);
-        }
-
-        $signature = substr($signatureBlob, 4);
-        Assert::stringNotEmpty($signature);
-
-        $rootHash = base64_decode($lines[2]);
-        if ($rootHash === '') {
-            throw InvalidCheckpointFormat::forIndex($bundleIndex);
-        }
-
-        return [
-            'noteText' => $noteText,
-            'keyHint' => substr($signatureBlob, 0, 4),
-            'signature' => $signature,
-            'rootHash' => $rootHash,
-        ];
     }
 
     private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void

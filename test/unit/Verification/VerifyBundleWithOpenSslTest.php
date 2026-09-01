@@ -10,9 +10,6 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointKeyHintMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointRootHashMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\CheckpointSignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
@@ -24,13 +21,10 @@ use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTran
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
-use function array_search;
 use function base64_decode;
 use function base64_encode;
 use function chr;
-use function explode;
 use function file_get_contents;
-use function implode;
 use function json_decode;
 use function ord;
 use function strlen;
@@ -46,9 +40,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT               = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST        = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY   = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const INVALID_CHECKPOINT_SIGNATURE_FIXTURE     = __DIR__ . '/../../fixture/invalid-checkpoint-signature-fail.json';
-    private const CHECKPOINT_BAD_KEYHINT_FIXTURE           = __DIR__ . '/../../fixture/checkpoint-bad-keyhint-fail.json';
-    private const CHECKPOINT_WRONG_ROOTHASH_FIXTURE        = __DIR__ . '/../../fixture/checkpoint-wrong-roothash-fail.json';
     private const SET_INVALID_SIGNATURE_FIXTURE            = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
     private const WRONG_HASHEDREKORD_ARTIFACT_FIXTURE      = __DIR__ . '/../../fixture/wrong-hashedrekord-artifact-fail.json';
     private const WRONG_HASHEDREKORD_ENTRY_FIXTURE         = __DIR__ . '/../../fixture/wrong-hashedrekord-entry-fail.json';
@@ -110,45 +101,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         return [Bundle::fromBundle($decoded)];
     }
 
-    /** @return non-empty-list<Bundle> */
-    private function loadSctWithExtensionsFixtureBundleWithTamperedCheckpointSignature(): array
-    {
-        $contents = file_get_contents(self::SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE);
-        Assert::stringNotEmpty($contents);
-
-        /** @var array<array-key, mixed> $decoded */
-        $decoded = json_decode($contents, true);
-
-        Assert::isArray($decoded['verificationMaterial']);
-        Assert::isArray($decoded['verificationMaterial']['tlogEntries']);
-        Assert::isArray($decoded['verificationMaterial']['tlogEntries'][0]);
-        Assert::isArray($decoded['verificationMaterial']['tlogEntries'][0]['inclusionProof']);
-        Assert::isArray($decoded['verificationMaterial']['tlogEntries'][0]['inclusionProof']['checkpoint']);
-        Assert::stringNotEmpty($decoded['verificationMaterial']['tlogEntries'][0]['inclusionProof']['checkpoint']['envelope']);
-
-        $lines          = explode("\n", $decoded['verificationMaterial']['tlogEntries'][0]['inclusionProof']['checkpoint']['envelope']);
-        $blankLineIndex = array_search('', $lines, true);
-        Assert::notFalse($blankLineIndex);
-        Assert::keyExists($lines, $blankLineIndex + 1);
-
-        $signatureLineParts = explode(' ', $lines[$blankLineIndex + 1], 3);
-        Assert::count($signatureLineParts, 3);
-
-        $signatureBlob = base64_decode($signatureLineParts[2]);
-        Assert::stringNotEmpty($signatureBlob);
-
-        // Flip the final byte, corrupting the signature whilst leaving the 4-byte key-hint intact.
-        $lastByte              = ord($signatureBlob[strlen($signatureBlob) - 1]);
-        $tamperedSignature     = substr($signatureBlob, 0, -1) . chr($lastByte ^ 0xFF);
-        $signatureLineParts[2] = base64_encode($tamperedSignature);
-
-        $lines[$blankLineIndex + 1] = implode(' ', $signatureLineParts);
-
-        $decoded['verificationMaterial']['tlogEntries'][0]['inclusionProof']['checkpoint']['envelope'] = implode("\n", $lines);
-
-        return [Bundle::fromBundle($decoded)];
-    }
-
     public function testSuccessfulVerification(): void
     {
         $this->expectNotToPerformAssertions();
@@ -184,20 +136,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsAnEd25519CheckpointWithATamperedSignature(): void
-    {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE);
-
-        $this->expectException(CheckpointSignatureVerificationFailed::class);
-        $verifier->verify(
-            $this->loadSctWithExtensionsFixtureBundleWithTamperedCheckpointSignature(),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
@@ -294,42 +232,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->verifier->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAnInvalidCheckpointSignature(): void
-    {
-        $this->expectException(CheckpointSignatureVerificationFailed::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::INVALID_CHECKPOINT_SIGNATURE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithACheckpointSignatureKeyHintMismatch(): void
-    {
-        $this->expectException(CheckpointKeyHintMismatch::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::CHECKPOINT_BAD_KEYHINT_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithACheckpointRootHashMismatch(): void
-    {
-        $this->expectException(CheckpointRootHashMismatch::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::CHECKPOINT_WRONG_ROOTHASH_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
