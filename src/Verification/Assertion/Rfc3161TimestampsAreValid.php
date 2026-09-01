@@ -7,18 +7,25 @@ namespace ThePhpFoundation\Attestation\Verification\Assertion;
 use DateTimeImmutable;
 use DateTimeZone;
 use ThePhpFoundation\Attestation\Bundle;
+use ThePhpFoundation\Attestation\DsseEnvelope;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\Verification\Der;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
+use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampMessageImprintMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityCertificateOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertificateValidity;
+use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\TrustedRoot;
 use Webmozart\Assert\Assert;
 
+use function array_key_exists;
 use function file_get_contents;
 use function file_put_contents;
+use function hash;
+use function hash_equals;
 use function in_array;
 use function openssl_cms_verify;
 use function openssl_x509_parse;
@@ -35,6 +42,13 @@ use const PKCS7_NOVERIFY;
 /** @link https://www.rfc-editor.org/rfc/rfc3161 */
 final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
 {
+    private const HASH_ALGORITHM_OIDS = [
+        "\x2b\x0e\x03\x02\x1a" => 'sha1',
+        "\x60\x86\x48\x01\x65\x03\x04\x02\x01" => 'sha256',
+        "\x60\x86\x48\x01\x65\x03\x04\x02\x02" => 'sha384',
+        "\x60\x86\x48\x01\x65\x03\x04\x02\x03" => 'sha512',
+    ];
+
     public function __construct(private TrustedRoot $trustedRoot)
     {
     }
@@ -42,7 +56,7 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void
     {
         foreach ($bundle->rfc3161Timestamps() as $timestampToken) {
-            $genTime = $this->verifyAndExtractGenTime($bundleIndex, $timestampToken);
+            $genTime = $this->verifyAndExtractGenTime($bundleIndex, $timestampToken, $this->signedContent($bundle));
 
             $certificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
             Assert::isArray($certificateInfo);
@@ -62,10 +76,29 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
         }
     }
 
-    /** @param non-empty-string $timestampToken */
-    private function verifyAndExtractGenTime(int $bundleIndex, string $timestampToken): int
+    /** @return non-empty-string */
+    private function signedContent(Bundle $bundle): string
+    {
+        $content = $bundle->content();
+        if (! $content instanceof DsseEnvelope && ! $content instanceof MessageSignature) {
+            throw UnsupportedBundleContent::new();
+        }
+
+        return $content->signature();
+    }
+
+    /**
+     * @param non-empty-string $timestampToken
+     * @param non-empty-string $signedContent
+     */
+    private function verifyAndExtractGenTime(int $bundleIndex, string $timestampToken, string $signedContent): int
     {
         [$validFor, $tstInfo, $certificateValidFor] = $this->verifyCmsSignatureAgainstKnownTimestampAuthorities($bundleIndex, $timestampToken);
+
+        $messageImprint = $this->extractMessageImprint($bundleIndex, $tstInfo);
+        if (! hash_equals(hash($messageImprint['algorithm'], $signedContent, true), $messageImprint['hashedMessage'])) {
+            throw Rfc3161TimestampMessageImprintMismatch::forIndex($bundleIndex);
+        }
 
         $genTime = $this->extractGeneralizedTime($bundleIndex, $tstInfo);
 
@@ -174,6 +207,44 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
         }
 
         throw Rfc3161TimestampVerificationFailed::forIndex($bundleIndex);
+    }
+
+    /**
+     * @param non-empty-string $tstInfo
+     *
+     * @return array{algorithm: non-empty-string, hashedMessage: non-empty-string}
+     */
+    private function extractMessageImprint(int $bundleIndex, string $tstInfo): array
+    {
+        [$tag, $content] = Der::readTlv($tstInfo, 0);
+        Assert::same($tag, Der::TAG_SEQUENCE);
+
+        $offset = 0;
+        for ($i = 0; $i < 2; $i++) {
+            [, , $offset] = Der::readTlv($content, $offset);
+        }
+
+        [$messageImprintTag, $messageImprintContent] = Der::readTlv($content, $offset);
+        Assert::same($messageImprintTag, Der::TAG_SEQUENCE);
+
+        [$algorithmTag, $algorithmContent, $algorithmEnd] = Der::readTlv($messageImprintContent, 0);
+        Assert::same($algorithmTag, Der::TAG_SEQUENCE);
+
+        [$oidTag, $oidValue] = Der::readTlv($algorithmContent, 0);
+        Assert::same($oidTag, Der::TAG_OBJECT_IDENTIFIER);
+
+        if (! array_key_exists($oidValue, self::HASH_ALGORITHM_OIDS)) {
+            throw InvalidRfc3161TimestampFormat::forIndex($bundleIndex);
+        }
+
+        [$hashedMessageTag, $hashedMessage] = Der::readTlv($messageImprintContent, $algorithmEnd);
+        Assert::same($hashedMessageTag, Der::TAG_OCTET_STRING);
+        Assert::stringNotEmpty($hashedMessage);
+
+        return [
+            'algorithm' => self::HASH_ALGORITHM_OIDS[$oidValue],
+            'hashedMessage' => $hashedMessage,
+        ];
     }
 
     /** @param non-empty-string $tstInfo */

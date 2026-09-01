@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
+use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampMessageImprintMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityCertificateOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\TrustedRoot;
@@ -27,6 +28,9 @@ final class Rfc3161TimestampsAreValidTest extends TestCase
 
     private const TSA_CERT_VALIDITY_BUNDLE_FIXTURE       = __DIR__ . '/../../../fixture/rekor2-timestamp-outside-tsa-cert-validity-fail.json';
     private const TSA_CERT_VALIDITY_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../../fixture/rekor2-timestamp-outside-tsa-cert-validity-fail-trusted-root.json';
+
+    private const PAYLOAD_MISMATCH_BUNDLE_FIXTURE       = __DIR__ . '/../../../fixture/rekor2-timestamp-payload-mismatch-fail.json';
+    private const PAYLOAD_MISMATCH_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../../fixture/rekor2-timestamp-payload-mismatch-fail-trusted-root.json';
 
     private static function bundle(string $fixturePath): Bundle
     {
@@ -72,6 +76,18 @@ final class Rfc3161TimestampsAreValidTest extends TestCase
             FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'),
             0,
             self::bundle(self::TSA_CERT_VALIDITY_BUNDLE_FIXTURE),
+        );
+    }
+
+    public function testRejectsAnRfc3161TimestampWhoseMessageImprintDoesNotMatchTheBundleContent(): void
+    {
+        $check = new Rfc3161TimestampsAreValid(new TrustedRoot(self::PAYLOAD_MISMATCH_TRUSTED_ROOT_FIXTURE));
+
+        $this->expectException(Rfc3161TimestampMessageImprintMismatch::class);
+        $check->assert(
+            FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'),
+            0,
+            self::bundle(self::PAYLOAD_MISMATCH_BUNDLE_FIXTURE),
         );
     }
 }
