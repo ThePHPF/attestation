@@ -17,6 +17,7 @@ use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAr
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidCheckpoints;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidSignedEntryTimestamps;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
@@ -28,7 +29,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValu
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
@@ -37,7 +37,6 @@ use Webmozart\Assert\Assert;
 use function array_key_exists;
 use function array_map;
 use function base64_decode;
-use function base64_encode;
 use function bin2hex;
 use function count;
 use function explode;
@@ -50,7 +49,6 @@ use function is_array;
 use function is_readable;
 use function is_string;
 use function json_decode;
-use function json_encode;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function openssl_x509_parse;
@@ -60,7 +58,6 @@ use function strlen;
 use function substr;
 use function trim;
 
-use const JSON_UNESCAPED_SLASHES;
 use const OPENSSL_ALGO_SHA256;
 
 class VerifyBundleWithOpenSsl implements VerifyBundle
@@ -108,6 +105,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new Rfc3161TimestampsAreValid($trustedRoot),
             new TransparencyLogEntriesHaveValidInclusionProof(),
             new TransparencyLogEntriesHaveValidCheckpoints($trustedRoot),
+            new TransparencyLogEntriesHaveValidSignedEntryTimestamps($trustedRoot),
         ];
     }
 
@@ -135,8 +133,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertTransparencyLogEntriesHaveValidSignedEntryTimestamps($bundleIndex, $bundle);
-
             $this->assertTransparencyLogEntriesMatchBundleContent($bundleIndex, $bundle, $file);
 
             $this->assertCertificateSignedByTrustedRoot($bundle);
@@ -155,35 +151,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $this->verifyMessageSignature($bundleIndex, $file, $bundle->certificate(), $bundle->content());
             } else {
                 throw UnsupportedBundleContent::new();
-            }
-        }
-    }
-
-    /** @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go */
-    private function assertTransparencyLogEntriesHaveValidSignedEntryTimestamps(int $bundleIndex, Bundle $bundle): void
-    {
-        foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            $signedEntryTimestamp = $transparencyLogEntry->signedEntryTimestamp();
-            $integratedTime       = $transparencyLogEntry->integratedTime();
-            if ($signedEntryTimestamp === null || $integratedTime === null) {
-                continue;
-            }
-
-            $transparencyLogKey = $this->trustedRoot->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
-
-            $signedContent = json_encode(
-                [
-                    'body' => base64_encode($transparencyLogEntry->canonicalizedBody()),
-                    'integratedTime' => $integratedTime,
-                    'logID' => bin2hex($transparencyLogEntry->logId()),
-                    'logIndex' => $transparencyLogEntry->logIndex(),
-                ],
-                JSON_UNESCAPED_SLASHES,
-            );
-            Assert::stringNotEmpty($signedContent);
-
-            if (! TransparencyLogSignature::verify($transparencyLogKey, $signedContent, $signedEntryTimestamp)) {
-                throw SignedEntryTimestampVerificationFailed::forIndex($bundleIndex);
             }
         }
     }

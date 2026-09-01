@@ -15,7 +15,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerific
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\Exception\SignedEntryTimestampVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
@@ -40,7 +39,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT               = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST        = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY   = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
-    private const SET_INVALID_SIGNATURE_FIXTURE            = __DIR__ . '/../../fixture/set-invalid-signature-fail.json';
     private const WRONG_HASHEDREKORD_ARTIFACT_FIXTURE      = __DIR__ . '/../../fixture/wrong-hashedrekord-artifact-fail.json';
     private const WRONG_HASHEDREKORD_ENTRY_FIXTURE         = __DIR__ . '/../../fixture/wrong-hashedrekord-entry-fail.json';
     private const WRONG_HASHEDREKORD_CERT_AND_SIG_FIXTURE  = __DIR__ . '/../../fixture/wrong-hashedrekord-cert-and-sig-fail.json';
@@ -232,18 +230,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->verifier->verify(
             $this->loadFixtureBundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsBundleWithAnInvalidSignedEntryTimestamp(): void
-    {
-        $this->expectException(SignedEntryTimestampVerificationFailed::class);
-        $this->verifier->verify(
-            $this->loadFixtureBundle(self::SET_INVALID_SIGNATURE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
