@@ -6,6 +6,7 @@ namespace ThePhpFoundation\Attestation\Verification;
 
 use Webmozart\Assert\Assert;
 
+use function array_key_exists;
 use function bcadd;
 use function bccomp;
 use function bcdiv;
@@ -24,32 +25,51 @@ use function strrev;
  * Verifies an ECDSA signature against an already-computed digest (rather than the signed message itself),
  * which ext-openssl has no way to do: openssl_verify() always hashes the message it's given internally.
  *
- * Only supports the NIST P-256 curve (secp256r1 / prime256v1) with SHA-256 digests, since that's the only
- * curve Sigstore certificates use. Requires ext-bcmath; callers must check extension_loaded('bcmath') first.
+ * Requires ext-bcmath; callers must check extension_loaded('bcmath') first.
  *
  * @link https://github.com/sigstore/sigstore-js/blob/main/packages/conformance/src/commands/verify-bundle.ts
  *       sigstore-js hits the exact same ext-openssl/Node crypto gap and works around it with the `elliptic`
  *       npm package; this does the equivalent raw point arithmetic using ext-bcmath instead of a dependency.
  */
-final class RawEcdsaP256DigestVerifier
+final class RawEcdsaDigestVerifier
 {
-    private const P_HEX  = 'FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF';
-    private const A_HEX  = 'FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFC';
-    private const GX_HEX = '6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296';
-    private const GY_HEX = '4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5';
-    private const N_HEX  = 'FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551';
+    private const CURVES = [
+        'prime256v1' => [
+            'p' => 'FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF',
+            'a' => 'FFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFC',
+            'gx' => '6B17D1F2E12C4247F8BCE6E563A440F277037D812DEB33A0F4A13945D898C296',
+            'gy' => '4FE342E2FE1A7F9B8EE7EB4A7C0F9E162BCE33576B315ECECBB6406837BF51F5',
+            'n' => 'FFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551',
+        ],
+        'secp384r1' => [
+            'p' => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF0000000000000000FFFFFFFF',
+            'a' => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF0000000000000000FFFFFFFC',
+            'gx' => 'AA87CA22BE8B05378EB1C71EF320AD746E1D3B628BA79B9859F741E082542A385502F25DBF55296C3A545E3872760AB7',
+            'gy' => '3617DE4A96262C6F5D9E98BF9292DC29F8F41DBD289A147CE9DA3113B5F0B8C00A60B1CE1D7E819D7A431D7C90EA0E5F',
+            'n' => 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFC7634D81F4372DDF581A0DB248B0A77AECEC196ACCC52973',
+        ],
+    ];
+
+    public static function isCurveSupported(string $curveName): bool
+    {
+        return array_key_exists($curveName, self::CURVES);
+    }
 
     /**
-     * @param non-empty-string $digest       raw SHA-256 digest bytes
+     * @param non-empty-string $curveName    an OpenSSL EC curve name, e.g. 'prime256v1' or 'secp384r1'
+     * @param non-empty-string $digest       raw digest bytes
      * @param non-empty-string $signatureDer ASN.1 DER SEQUENCE{INTEGER r, INTEGER s}
      * @param non-empty-string $qxBytes      public key X coordinate, raw bytes
      * @param non-empty-string $qyBytes      public key Y coordinate, raw bytes
      */
-    public static function verify(string $digest, string $signatureDer, string $qxBytes, string $qyBytes): bool
+    public static function verify(string $curveName, string $digest, string $signatureDer, string $qxBytes, string $qyBytes): bool
     {
-        $p = self::hex2dec(self::P_HEX);
-        $a = self::hex2dec(self::A_HEX);
-        $n = self::hex2dec(self::N_HEX);
+        Assert::keyExists(self::CURVES, $curveName);
+        $curve = self::CURVES[$curveName];
+
+        $p = self::hex2dec($curve['p']);
+        $a = self::hex2dec($curve['a']);
+        $n = self::hex2dec($curve['n']);
 
         [$rHex, $sHex] = self::parseSignature($signatureDer);
 
@@ -70,7 +90,7 @@ final class RawEcdsaP256DigestVerifier
         $u1 = bcmod(bcmul($e, $w), $n);
         $u2 = bcmod(bcmul($r, $w), $n);
 
-        $basePoint   = [self::hex2dec(self::GX_HEX), self::hex2dec(self::GY_HEX)];
+        $basePoint   = [self::hex2dec($curve['gx']), self::hex2dec($curve['gy'])];
         $publicKey   = [self::hex2dec(bin2hex($qxBytes)), self::hex2dec(bin2hex($qyBytes))];
         $u1BasePoint = self::pointMultiply($basePoint, $u1, $p, $a);
         $u2PublicKey = self::pointMultiply($publicKey, $u2, $p, $a);

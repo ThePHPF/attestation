@@ -17,7 +17,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\NoBcmath;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
-use ThePhpFoundation\Attestation\Verification\RawEcdsaP256DigestVerifier;
+use ThePhpFoundation\Attestation\Verification\RawEcdsaDigestVerifier;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -115,13 +115,18 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
 
         $details = openssl_pkey_get_details($publicKey);
         Assert::isArray($details);
-        Assert::keyExists($details, 'ec');
-        Assert::isArray($details['ec']);
 
-        if (! array_key_exists('curve_name', $details['ec']) || $details['ec']['curve_name'] !== 'prime256v1') {
+        if (
+            ! array_key_exists('ec', $details)
+            || ! is_array($details['ec'])
+            || ! array_key_exists('curve_name', $details['ec'])
+            || ! is_string($details['ec']['curve_name'])
+            || ! RawEcdsaDigestVerifier::isCurveSupported($details['ec']['curve_name'])
+        ) {
             throw CannotVerifyMessageSignatureWithoutArtifact::new();
         }
 
+        Assert::stringNotEmpty($details['ec']['curve_name']);
         Assert::keyExists($details['ec'], 'x');
         Assert::stringNotEmpty($details['ec']['x']);
         Assert::keyExists($details['ec'], 'y');
@@ -131,7 +136,7 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
         Assert::notFalse($digest);
         Assert::stringNotEmpty($digest);
 
-        if (! RawEcdsaP256DigestVerifier::verify($digest, $content->signature(), $details['ec']['x'], $details['ec']['y'])) {
+        if (! RawEcdsaDigestVerifier::verify($details['ec']['curve_name'], $digest, $content->signature(), $details['ec']['x'], $details['ec']['y'])) {
             throw SignatureVerificationFailed::forIndex($bundleIndex);
         }
     }

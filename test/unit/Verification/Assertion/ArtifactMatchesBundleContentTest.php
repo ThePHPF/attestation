@@ -32,6 +32,10 @@ final class ArtifactMatchesBundleContentTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT        = __DIR__ . '/../../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
 
+    /** Real bundle for Python 3.9.14 (2022); signed with a P-384 key, but declares a SHA-256 digest. */
+    private const P384_HISTORICAL_BUNDLE_FIXTURE  = __DIR__ . '/../../../fixture/python-3.9.14-historical.json';
+    private const P384_HISTORICAL_ARTIFACT_DIGEST = '9201836e2c16361b2b7408680502393737d44f227333fe2e5729c7d5f6041675';
+
     /** @return array<array-key, mixed> */
     private static function decodedFixture(string $path): array
     {
@@ -158,6 +162,19 @@ final class ArtifactMatchesBundleContentTest extends TestCase
             ),
             0,
             self::bundle(self::MESSAGE_SIGNATURE_BUNDLE_FIXTURE),
+        );
+    }
+
+    public function testAcceptsAP384MessageSignatureVerifiedFromTheDigestAloneWhenTheRealArtifactIsUnavailable(): void
+    {
+        $this->expectNotToPerformAssertions();
+        self::check()->assert(
+            FilenameWithChecksum::fromFilenameAndChecksum(
+                'sha256:' . self::P384_HISTORICAL_ARTIFACT_DIGEST,
+                self::P384_HISTORICAL_ARTIFACT_DIGEST,
+            ),
+            0,
+            self::bundle(self::P384_HISTORICAL_BUNDLE_FIXTURE),
         );
     }
 

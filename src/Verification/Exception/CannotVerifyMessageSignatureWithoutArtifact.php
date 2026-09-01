@@ -10,7 +10,7 @@ class CannotVerifyMessageSignatureWithoutArtifact extends FailedToVerifyArtifact
     {
         return new self(
             'Cannot verify a message-signature bundle without the real artifact file; ' .
-            'digest-only verification is only supported for ECDSA P-256 signing keys.',
+            'digest-only verification is only supported for ECDSA P-256/P-384 signing keys.',
         );
     }
 }
