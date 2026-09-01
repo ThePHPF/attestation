@@ -38,6 +38,9 @@ final class TransparencyLogEntriesHaveValidCheckpointsTest extends TestCase
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
 
+    private const REKOR2_CHECKPOINT_ORIGIN_NOT_FIRST_BUNDLE_FIXTURE       = __DIR__ . '/../../../fixture/rekor2-checkpoint-origin-not-first.json';
+    private const REKOR2_CHECKPOINT_ORIGIN_NOT_FIRST_TRUSTED_ROOT_FIXTURE = __DIR__ . '/../../../fixture/rekor2-checkpoint-origin-not-first-trusted-root.json';
+
     /** @return non-empty-list<Bundle> */
     private static function loadFixtureBundle(string $path): array
     {
@@ -91,6 +94,14 @@ final class TransparencyLogEntriesHaveValidCheckpointsTest extends TestCase
     private static function assertOnFirstBundle(TransparencyLogEntriesHaveValidCheckpoints $check, Bundle $bundle): void
     {
         $check->assert(FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'), 0, $bundle);
+    }
+
+    public function testAcceptsACheckpointWhereTheLogsSignatureIsNotTheFirstLine(): void
+    {
+        $check = new TransparencyLogEntriesHaveValidCheckpoints(new TrustedRoot(self::REKOR2_CHECKPOINT_ORIGIN_NOT_FIRST_TRUSTED_ROOT_FIXTURE));
+
+        $this->expectNotToPerformAssertions();
+        self::assertOnFirstBundle($check, self::loadFixtureBundle(self::REKOR2_CHECKPOINT_ORIGIN_NOT_FIRST_BUNDLE_FIXTURE)[0]);
     }
 
     public function testAcceptsAValidEd25519Checkpoint(): void

@@ -51,17 +51,19 @@ final class TransparencyLogEntriesHaveValidCheckpoints implements VerifyBundleCh
 
             $transparencyLogKey = $this->trustedRoot->resolveTransparencyLogPublicKey($transparencyLogEntry->logId());
 
-            if (! hash_equals(substr($transparencyLogKey['keyId'], 0, 4), $parsedCheckpoint['keyHint'])) {
+            $matchedSignature = null;
+            foreach ($parsedCheckpoint['signatures'] as $signatureLine) {
+                if (hash_equals(substr($transparencyLogKey['keyId'], 0, 4), $signatureLine['keyHint'])) {
+                    $matchedSignature = $signatureLine['signature'];
+                    break;
+                }
+            }
+
+            if ($matchedSignature === null) {
                 throw CheckpointKeyHintMismatch::forIndex($bundleIndex);
             }
 
-            if (
-                ! TransparencyLogSignature::verify(
-                    $transparencyLogKey,
-                    $parsedCheckpoint['noteText'],
-                    $parsedCheckpoint['signature'],
-                )
-            ) {
+            if (! TransparencyLogSignature::verify($transparencyLogKey, $parsedCheckpoint['noteText'], $matchedSignature)) {
                 throw CheckpointSignatureVerificationFailed::forIndex($bundleIndex);
             }
 
@@ -71,7 +73,13 @@ final class TransparencyLogEntriesHaveValidCheckpoints implements VerifyBundleCh
         }
     }
 
-    /** @return array{noteText: non-empty-string, keyHint: non-empty-string, signature: non-empty-string, rootHash: non-empty-string} */
+    /**
+     * @return array{
+     *     noteText: non-empty-string,
+     *     signatures: non-empty-list<array{keyHint: non-empty-string, signature: non-empty-string}>,
+     *     rootHash: non-empty-string
+     * }
+     */
     private function parseCheckpointEnvelope(int $bundleIndex, string $envelope): array
     {
         $lines          = explode("\n", $envelope);
@@ -89,18 +97,34 @@ final class TransparencyLogEntriesHaveValidCheckpoints implements VerifyBundleCh
 
         $noteText = implode("\n", array_slice($lines, 0, $blankLineIndex)) . "\n";
 
-        $signatureLineParts = explode(' ', $lines[$blankLineIndex + 1], 3);
-        if (count($signatureLineParts) !== 3) {
-            throw InvalidCheckpointFormat::forIndex($bundleIndex);
+        $signatures = [];
+        foreach (array_slice($lines, $blankLineIndex + 1) as $signatureLine) {
+            if ($signatureLine === '') {
+                continue;
+            }
+
+            $signatureLineParts = explode(' ', $signatureLine, 3);
+            if (count($signatureLineParts) !== 3) {
+                continue;
+            }
+
+            $signatureBlob = base64_decode($signatureLineParts[2]);
+            if ($signatureBlob === '' || strlen($signatureBlob) <= 4) {
+                continue;
+            }
+
+            $signature = substr($signatureBlob, 4);
+            Assert::stringNotEmpty($signature);
+
+            $signatures[] = [
+                'keyHint' => substr($signatureBlob, 0, 4),
+                'signature' => $signature,
+            ];
         }
 
-        $signatureBlob = base64_decode($signatureLineParts[2]);
-        if ($signatureBlob === '' || strlen($signatureBlob) <= 4) {
+        if ($signatures === []) {
             throw InvalidCheckpointFormat::forIndex($bundleIndex);
         }
-
-        $signature = substr($signatureBlob, 4);
-        Assert::stringNotEmpty($signature);
 
         $rootHash = base64_decode($lines[2]);
         if ($rootHash === '') {
@@ -109,8 +133,7 @@ final class TransparencyLogEntriesHaveValidCheckpoints implements VerifyBundleCh
 
         return [
             'noteText' => $noteText,
-            'keyHint' => substr($signatureBlob, 0, 4),
-            'signature' => $signature,
+            'signatures' => $signatures,
             'rootHash' => $rootHash,
         ];
     }
