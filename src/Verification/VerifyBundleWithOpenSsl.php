@@ -10,6 +10,7 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSignedCertificateTimestamp;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
@@ -29,7 +30,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValu
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
-use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
@@ -58,19 +58,13 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */
-    private const CT_PRECERT_SCTS_EXTENSION_OID_DER = "\x2b\x06\x01\x04\x01\xd6\x79\x02\x04\x02";
-
-    private TrustedRoot $trustedRoot;
-
     /** @var list<VerifyBundleCheck> */
     private array $checks;
 
     /** @param list<VerifyBundleCheck> $checks */
-    public function __construct(TrustedRoot $trustedRoot, array $checks)
+    public function __construct(array $checks)
     {
-        $this->trustedRoot = $trustedRoot;
-        $this->checks      = $checks;
+        $this->checks = $checks;
     }
 
     public static function factory(): self
@@ -81,9 +75,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @param non-empty-string $trustedRootFilePath */
     public static function withTrustedRootFile(string $trustedRootFilePath): self
     {
-        $trustedRoot = new TrustedRoot($trustedRootFilePath);
-
-        return new self($trustedRoot, self::defaultChecks($trustedRoot));
+        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath)));
     }
 
     /** @return list<VerifyBundleCheck> */
@@ -100,6 +92,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesHaveValidSignedEntryTimestamps($trustedRoot),
             new TransparencyLogEntriesMatchBundleContent(),
             new CertificateSignedByTrustedRoot($trustedRoot),
+            new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot),
         ];
     }
 
@@ -127,8 +120,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertCertificateHasATrustedSignedCertificateTimestamp($bundle);
-
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
 
             $this->assertCertificateIdentity($bundle, $expectedCertificateIdentity);
@@ -143,96 +134,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 throw UnsupportedBundleContent::new();
             }
         }
-    }
-
-    private function assertCertificateHasATrustedSignedCertificateTimestamp(Bundle $bundle): void
-    {
-        $logIds = $this->extractSignedCertificateTimestampLogIds($bundle->certificate()->derEncodedBytes());
-
-        foreach ($logIds as $logId) {
-            if ($this->trustedRoot->isCertificateTransparencyLogIdTrusted($logId)) {
-                return;
-            }
-        }
-
-        throw UntrustedCertificateTransparencyLogKey::new();
-    }
-
-    /** @return non-empty-list<non-empty-string> */
-    private function extractSignedCertificateTimestampLogIds(string $certificateDer): array
-    {
-        [$certTag, $certContent] = Der::readTlv($certificateDer, 0);
-        Assert::same($certTag, Der::TAG_SEQUENCE);
-
-        [$tbsTag, $tbsContent] = Der::readTlv($certContent, 0);
-        Assert::same($tbsTag, Der::TAG_SEQUENCE);
-
-        $extensionsBlock = null;
-        $offset          = 0;
-        while ($offset < strlen($tbsContent)) {
-            [$fieldTag, $fieldValue, $offset] = Der::readTlv($tbsContent, $offset);
-            if ($fieldTag !== Der::TAG_CONTEXT_EXTENSIONS) {
-                continue;
-            }
-
-            $extensionsBlock = $fieldValue;
-        }
-
-        Assert::stringNotEmpty($extensionsBlock);
-
-        [$extSeqTag, $extSeqContent] = Der::readTlv($extensionsBlock, 0);
-        Assert::same($extSeqTag, Der::TAG_SEQUENCE);
-
-        $sctExtensionValue = null;
-        $offset            = 0;
-        while ($offset < strlen($extSeqContent)) {
-            [$extTag, $extContent, $offset] = Der::readTlv($extSeqContent, $offset);
-            if ($extTag !== Der::TAG_SEQUENCE) {
-                continue;
-            }
-
-            [$oidTag, $oidValue, $innerOffset] = Der::readTlv($extContent, 0);
-            Assert::same($oidTag, Der::TAG_OBJECT_IDENTIFIER);
-            if ($oidValue !== self::CT_PRECERT_SCTS_EXTENSION_OID_DER) {
-                continue;
-            }
-
-            [$nextTag, $nextValue, $innerOffset] = Der::readTlv($extContent, $innerOffset);
-            if ($nextTag === Der::TAG_BOOLEAN) {
-                [$nextTag, $nextValue] = Der::readTlv($extContent, $innerOffset);
-            }
-
-            Assert::same($nextTag, Der::TAG_OCTET_STRING);
-            $sctExtensionValue = $nextValue;
-        }
-
-        Assert::stringNotEmpty($sctExtensionValue);
-
-        [$innerOctetStringTag, $sctList] = Der::readTlv($sctExtensionValue, 0);
-        Assert::same($innerOctetStringTag, Der::TAG_OCTET_STRING);
-        Assert::true(strlen($sctList) >= 2);
-
-        $logIds = [];
-        $offset = 2; // Skip the 2-byte total-length prefix of the SignedCertificateTimestampList.
-        while ($offset < strlen($sctList)) {
-            Assert::true($offset + 2 <= strlen($sctList));
-            $sctLength = (ord($sctList[$offset]) << 8) | ord($sctList[$offset + 1]);
-            $offset   += 2;
-
-            Assert::true($offset + $sctLength <= strlen($sctList));
-            $sct     = substr($sctList, $offset, $sctLength);
-            $offset += $sctLength;
-
-            // SignedCertificateTimestamp ::= version(1) || log_id(32) || timestamp(8) || extensions(...) || signature(...)
-            Assert::true(strlen($sct) >= 33);
-            $logId = substr($sct, 1, 32);
-            Assert::stringNotEmpty($logId);
-            $logIds[] = $logId;
-        }
-
-        Assert::isNonEmptyList($logIds);
-
-        return $logIds;
     }
 
     /** @param array<non-empty-string, string> $extensions */

@@ -13,7 +13,6 @@ use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMisma
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -32,8 +31,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY   = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
     private const TLOG_KEY_VALIDITY_BUNDLE_FIXTURE         = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive.json';
     private const TLOG_KEY_VALIDITY_TRUSTED_ROOT_FIXTURE   = __DIR__ . '/../../fixture/trust-root-tlog-validity-end-inclusive-trusted-root.json';
-    private const INVALID_CT_KEY_FIXTURE                   = __DIR__ . '/../../fixture/invalid-ct-key-fail.json';
-    private const INVALID_CT_KEY_TRUSTED_ROOT              = __DIR__ . '/../../fixture/invalid-ct-key-fail-trusted-root.json';
     private const TSA_VALIDITY_BUNDLE_FIXTURE              = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive.json';
     private const TSA_VALIDITY_TRUSTED_ROOT_FIXTURE        = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive-trusted-root.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE       = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
@@ -107,20 +104,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
         $this->expectNotToPerformAssertions();
         $verifier->verify(
             $this->loadFixtureBundle(self::TLOG_KEY_VALIDITY_BUNDLE_FIXTURE),
-            FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
-            'message-signature-artifact.txt',
-            [],
-            self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
-        );
-    }
-
-    public function testRejectsACertificateWhoseSignedCertificateTimestampReferencesAnUntrustedCtLog(): void
-    {
-        $verifier = VerifyBundleWithOpenSsl::withTrustedRootFile(self::INVALID_CT_KEY_TRUSTED_ROOT);
-
-        $this->expectException(UntrustedCertificateTransparencyLogKey::class);
-        $verifier->verify(
-            $this->loadFixtureBundle(self::INVALID_CT_KEY_FIXTURE),
             FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT),
             'message-signature-artifact.txt',
             [],
