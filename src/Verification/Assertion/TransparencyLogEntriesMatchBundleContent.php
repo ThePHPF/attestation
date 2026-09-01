@@ -36,6 +36,17 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
                     $bundle->content(),
                     $bundle->certificate(),
                 );
+            } elseif (
+                $transparencyLogEntry->kind() === 'hashedrekord'
+                && $transparencyLogEntry->version() === self::HASHEDREKORD_VERSION_0_0_2
+                && $bundle->content() instanceof DsseEnvelope
+            ) {
+                $this->assertHashedRekordV002EntryMatchesDsseEnvelope(
+                    $bundleIndex,
+                    $transparencyLogEntry,
+                    $bundle->content(),
+                    $bundle->certificate(),
+                );
             } elseif ($transparencyLogEntry->kind() === 'dsse' && $bundle->content() instanceof DsseEnvelope) {
                 $this->assertDsseEntryMatchesBundleContent(
                     $bundleIndex,
@@ -140,6 +151,36 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
             $v002Spec['signature']['content'],
             $certificateDer,
         ];
+    }
+
+    /** @link https://github.com/sigstore/sigstore-js/blob/main/packages/verify/src/bundle/dsse.ts */
+    private function assertHashedRekordV002EntryMatchesDsseEnvelope(
+        int $bundleIndex,
+        TransparencyLogEntry $transparencyLogEntry,
+        DsseEnvelope $content,
+        PemCertificate $certificate,
+    ): void {
+        /** @var array<array-key, mixed> $body */
+        $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
+        Assert::isArray($body['spec']);
+
+        [$entryDigestHex, $entrySignatureContent, $entryCertificateDer] = $this->parseHashedRekordV002Spec($body['spec']);
+
+        $actualDigestHex = hash('sha256', $content->preAuthenticationEncoding());
+        if (! hash_equals($actualDigestHex, $entryDigestHex)) {
+            throw DigestMismatch::fromChecksumMismatch($actualDigestHex, $entryDigestHex);
+        }
+
+        $entrySignature = base64_decode($entrySignatureContent);
+        Assert::stringNotEmpty($entrySignature);
+
+        if (! hash_equals($content->signature(), $entrySignature)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'signature');
+        }
+
+        if (! hash_equals($certificate->derEncodedBytes(), $entryCertificateDer)) {
+            throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'certificate');
+        }
     }
 
     private function assertDsseEntryMatchesBundleContent(

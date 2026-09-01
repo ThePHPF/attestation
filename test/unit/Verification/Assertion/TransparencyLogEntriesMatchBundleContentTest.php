@@ -15,6 +15,8 @@ use function base64_encode;
 use function bin2hex;
 use function hash;
 use function json_encode;
+use function sprintf;
+use function strlen;
 
 /** @covers \ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesMatchBundleContent */
 final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
@@ -109,6 +111,45 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
             'messageSignature' => [
                 'messageDigest' => ['algorithm' => 'SHA2_256', 'digest' => base64_encode('not a real digest')],
                 'signature' => base64_encode($messageSignatureBytes),
+            ],
+        ]);
+    }
+
+    private static function hashedRekordV002DsseBundle(
+        string $payload,
+        string $entryDigestBytes,
+        string $entrySignatureBytes,
+        string $entryCertificateDerBytes,
+        string $envelopeSignatureBytes,
+        string $certificateDerBytes,
+    ): Bundle {
+        return Bundle::fromBundle([
+            'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
+            'verificationMaterial' => [
+                'certificate' => ['rawBytes' => base64_encode($certificateDerBytes)],
+                'tlogEntries' => [
+                    [
+                        'logIndex' => '1',
+                        'kindVersion' => ['kind' => 'hashedrekord', 'version' => '0.0.2'],
+                        'logId' => ['keyId' => base64_encode('not a real log id')],
+                        'canonicalizedBody' => base64_encode((string) json_encode([
+                            'spec' => [
+                                'hashedRekordV002' => [
+                                    'data' => ['digest' => base64_encode($entryDigestBytes)],
+                                    'signature' => [
+                                        'content' => base64_encode($entrySignatureBytes),
+                                        'verifier' => ['x509Certificate' => ['rawBytes' => base64_encode($entryCertificateDerBytes)]],
+                                    ],
+                                ],
+                            ],
+                        ])),
+                    ],
+                ],
+            ],
+            'dsseEnvelope' => [
+                'payload' => base64_encode($payload),
+                'payloadType' => 'application/vnd.in-toto+json',
+                'signatures' => [['sig' => base64_encode($envelopeSignatureBytes)]],
             ],
         ]);
     }
@@ -247,6 +288,47 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
 
         $this->expectException(DigestMismatch::class);
         self::assertOnBundle($bundle, bin2hex('a different digest'));
+    }
+
+    private static function preAuthenticationEncodingDigestBytes(string $payload): string
+    {
+        return hash('sha256', sprintf('DSSEv1 %d %s %d %s', strlen('application/vnd.in-toto+json'), 'application/vnd.in-toto+json', strlen($payload), $payload), true);
+    }
+
+    public function testAcceptsAMatchingHashedRekordV002DsseEntry(): void
+    {
+        $payload = 'a dsse payload';
+        $bundle  = self::hashedRekordV002DsseBundle($payload, self::preAuthenticationEncodingDigestBytes($payload), self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES, self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES);
+
+        $this->expectNotToPerformAssertions();
+        self::assertOnBundle($bundle, 'irrelevant');
+    }
+
+    public function testRejectsAHashedRekordV002DsseEntryWithAMismatchedDigest(): void
+    {
+        $payload = 'a dsse payload';
+        $bundle  = self::hashedRekordV002DsseBundle($payload, self::preAuthenticationEncodingDigestBytes('a different payload'), self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES, self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES);
+
+        $this->expectException(DigestMismatch::class);
+        self::assertOnBundle($bundle, 'irrelevant');
+    }
+
+    public function testRejectsAHashedRekordV002DsseEntryWithAMismatchedSignature(): void
+    {
+        $payload = 'a dsse payload';
+        $bundle  = self::hashedRekordV002DsseBundle($payload, self::preAuthenticationEncodingDigestBytes($payload), self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES, self::OTHER_SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES);
+
+        $this->expectException(TransparencyLogEntryContentMismatch::class);
+        self::assertOnBundle($bundle, 'irrelevant');
+    }
+
+    public function testRejectsAHashedRekordV002DsseEntryWithAMismatchedCertificate(): void
+    {
+        $payload = 'a dsse payload';
+        $bundle  = self::hashedRekordV002DsseBundle($payload, self::preAuthenticationEncodingDigestBytes($payload), self::SIGNATURE_BYTES, self::CERTIFICATE_DER_BYTES, self::SIGNATURE_BYTES, self::OTHER_CERTIFICATE_DER_BYTES);
+
+        $this->expectException(TransparencyLogEntryContentMismatch::class);
+        self::assertOnBundle($bundle, 'irrelevant');
     }
 
     public function testAcceptsAMatchingDsseEntry(): void
