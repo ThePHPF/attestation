@@ -11,9 +11,7 @@ use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UntrustedCertificateTransparencyLogKey;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
@@ -189,18 +187,6 @@ class VerifyBundleWithOpenSslTest extends TestCase
             ],
             'https://github.com/some-other-org/some-other-repo/.github/workflows/build.yml@refs/heads/main',
         );
-    }
-
-    public function testCertificateWasNotVerifiedFromTrustedRoot(): void
-    {
-        $this->expectException(IssuerCertificateVerificationFailed::class);
-        self::markTestIncomplete();
-    }
-
-    public function testCertificateWasNotFoundInAnyTrustedRoot(): void
-    {
-        $this->expectException(NoIssuerCertificateInTrustedRoot::class);
-        self::markTestIncomplete();
     }
 
     public function testDsseEnvelopeSignatureVerificationFailed(): void

@@ -10,6 +10,7 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\MessageSignature;
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
@@ -24,9 +25,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\CertificateIdentityMisma
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
-use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
@@ -48,7 +47,6 @@ use function json_decode;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function openssl_x509_parse;
-use function openssl_x509_verify;
 use function ord;
 use function strlen;
 use function substr;
@@ -101,6 +99,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesHaveValidCheckpoints($trustedRoot),
             new TransparencyLogEntriesHaveValidSignedEntryTimestamps($trustedRoot),
             new TransparencyLogEntriesMatchBundleContent(),
+            new CertificateSignedByTrustedRoot($trustedRoot),
         ];
     }
 
@@ -128,8 +127,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
                 $check->assert($file, $bundleIndex, $bundle);
             }
 
-            $this->assertCertificateSignedByTrustedRoot($bundle);
-
             $this->assertCertificateHasATrustedSignedCertificateTimestamp($bundle);
 
             $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
@@ -145,29 +142,6 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             } else {
                 throw UnsupportedBundleContent::new();
             }
-        }
-    }
-
-    private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void
-    {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate()->decoratedCertificate());
-        Assert::isArray($attestationCertificateInfo);
-        Assert::keyExists($attestationCertificateInfo, 'issuer');
-        if (is_array($attestationCertificateInfo['issuer'])) {
-            Assert::allStringNotEmpty($attestationCertificateInfo['issuer']);
-        } else {
-            Assert::stringNotEmpty($attestationCertificateInfo['issuer']);
-        }
-
-        $caCertificate = $this->trustedRoot->resolveCertificateAuthorityCertificate($attestationCertificateInfo['issuer']);
-        if ($caCertificate === null) {
-            /** @psalm-suppress MixedArgument */
-            throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
-        }
-
-        if (openssl_x509_verify($bundle->certificate()->decoratedCertificate(), $caCertificate->decoratedCertificate()) !== 1) {
-            /** @psalm-suppress MixedArgument */
-            throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
         }
     }
 
