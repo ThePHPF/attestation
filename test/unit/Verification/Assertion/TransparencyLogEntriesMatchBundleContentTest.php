@@ -46,7 +46,7 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         string $entrySignatureBytes,
         string $entryCertificateDerBytes,
         string $messageSignatureBytes,
-        string $certificateDerBytes
+        string $certificateDerBytes,
     ): Bundle {
         return Bundle::fromBundle([
             'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
@@ -81,7 +81,7 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         string $entrySignatureBytes,
         string $entryCertificateDerBytes,
         string $messageSignatureBytes,
-        string $certificateDerBytes
+        string $certificateDerBytes,
     ): Bundle {
         return Bundle::fromBundle([
             'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
@@ -119,7 +119,7 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         string $entrySignatureBytes,
         string $entryCertificateDerBytes,
         string $envelopeSignatureBytes,
-        string $certificateDerBytes
+        string $certificateDerBytes,
     ): Bundle {
         return Bundle::fromBundle([
             'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
@@ -158,7 +158,7 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         string $entrySignatureBytes,
         string $entryCertificateDerBytes,
         string $envelopeSignatureBytes,
-        string $certificateDerBytes
+        string $certificateDerBytes,
     ): Bundle {
         return Bundle::fromBundle([
             'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',

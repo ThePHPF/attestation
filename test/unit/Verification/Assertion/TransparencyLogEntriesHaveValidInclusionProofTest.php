@@ -31,7 +31,7 @@ final class TransparencyLogEntriesHaveValidInclusionProofTest extends TestCase
     }
 
     /** @param list<string> $proofHashes */
-    private static function bundleWithInclusionProof(?array $proofHashes, string $rootHash): Bundle
+    private static function bundleWithInclusionProof(array|null $proofHashes, string $rootHash): Bundle
     {
         $tlogEntry = [
             'logIndex' => '1',

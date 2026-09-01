@@ -25,13 +25,9 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
 {
     public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    /** @var list<VerifyBundleCheck> */
-    private array $checks;
-
     /** @param list<VerifyBundleCheck> $checks */
-    public function __construct(array $checks)
+    public function __construct(private array $checks)
     {
-        $this->checks = $checks;
     }
 
     /**

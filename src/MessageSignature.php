@@ -16,19 +16,12 @@ final class MessageSignature implements SigstoreBundleContent
     /** @link https://github.com/sigstore/protobuf-specs/blob/main/protos/sigstore_common.proto */
     private const SUPPORTED_DIGEST_ALGORITHM = 'SHA2_256';
 
-    /** @var non-empty-string */
-    private string $digestHex;
-    /** @var non-empty-string */
-    private string $signature;
-
     /**
      * @param non-empty-string $digestHex
      * @param non-empty-string $signature
      */
-    private function __construct(string $digestHex, string $signature)
+    private function __construct(private string $digestHex, private string $signature)
     {
-        $this->digestHex = $digestHex;
-        $this->signature = $signature;
     }
 
     /** @param array<array-key, mixed> $messageSignature */

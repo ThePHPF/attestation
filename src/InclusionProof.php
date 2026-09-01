@@ -12,21 +12,9 @@ use function base64_decode;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class InclusionProof
 {
-    private int $logIndex;
-    private string $rootHash;
-    private int $treeSize;
-    /** @var list<string> */
-    private array $hashes;
-    private ?string $checkpointEnvelope;
-
     /** @param list<string> $hashes */
-    private function __construct(int $logIndex, string $rootHash, int $treeSize, array $hashes, ?string $checkpointEnvelope)
+    private function __construct(private int $logIndex, private string $rootHash, private int $treeSize, private array $hashes, private string|null $checkpointEnvelope)
     {
-        $this->logIndex           = $logIndex;
-        $this->rootHash           = $rootHash;
-        $this->treeSize           = $treeSize;
-        $this->hashes             = $hashes;
-        $this->checkpointEnvelope = $checkpointEnvelope;
     }
 
     /** @param array<array-key, mixed> $inclusionProof */
@@ -94,7 +82,7 @@ final class InclusionProof
         return $this->hashes;
     }
 
-    public function checkpointEnvelope(): ?string
+    public function checkpointEnvelope(): string|null
     {
         return $this->checkpointEnvelope;
     }

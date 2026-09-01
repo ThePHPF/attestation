@@ -35,21 +35,12 @@ class DownloadGitHubBundle implements BundleSource
      */
     private const GITHUB_API_VERSION = '2022-11-28';
 
-    /** @var non-empty-string */
-    private string $owner;
-    /** @var non-empty-string */
-    private string $githubApiBaseUrl;
-    private HttpDownloader $httpDownloader;
-
     /**
      * @param non-empty-string $owner
      * @param non-empty-string $githubApiBaseUrl
      */
-    public function __construct(string $owner, string $githubApiBaseUrl, HttpDownloader $httpDownloader)
+    public function __construct(private string $owner, private string $githubApiBaseUrl, private HttpDownloader $httpDownloader)
     {
-        $this->owner            = $owner;
-        $this->githubApiBaseUrl = $githubApiBaseUrl;
-        $this->httpDownloader   = $httpDownloader;
     }
 
     /** @param non-empty-string $owner */

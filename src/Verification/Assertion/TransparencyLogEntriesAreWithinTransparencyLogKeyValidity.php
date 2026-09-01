@@ -11,11 +11,8 @@ use ThePhpFoundation\Attestation\Verification\TrustedRoot;
 
 final class TransparencyLogEntriesAreWithinTransparencyLogKeyValidity implements VerifyBundleCheck
 {
-    private TrustedRoot $trustedRoot;
-
-    public function __construct(TrustedRoot $trustedRoot)
+    public function __construct(private TrustedRoot $trustedRoot)
     {
-        $this->trustedRoot = $trustedRoot;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

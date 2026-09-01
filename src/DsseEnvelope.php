@@ -13,23 +13,13 @@ use function strlen;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class DsseEnvelope implements SigstoreBundleContent
 {
-    /** @var non-empty-string */
-    private string $payload;
-    /** @var non-empty-string */
-    private string $payloadType;
-    /** @var non-empty-string */
-    private string $signature;
-
     /**
      * @param non-empty-string $payload
      * @param non-empty-string $payloadType
      * @param non-empty-string $signature
      */
-    private function __construct(string $payload, string $payloadType, string $signature)
+    private function __construct(private string $payload, private string $payloadType, private string $signature)
     {
-        $this->payload     = $payload;
-        $this->payloadType = $payloadType;
-        $this->signature   = $signature;
     }
 
     /** @param array<array-key, mixed> $dsseEnvelope */

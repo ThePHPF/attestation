@@ -8,7 +8,7 @@ use function sprintf;
 
 class TransparencyLogKeyOutsideValidityPeriod extends FailedToVerifyArtifact
 {
-    public static function forIndex(int $bundleIndex, int $integratedTime, int $keyValidFrom, ?int $keyValidTo): self
+    public static function forIndex(int $bundleIndex, int $integratedTime, int $keyValidFrom, int|null $keyValidTo): self
     {
         return new self(sprintf(
             'Transparency log entry for attestation %d has an integrated time (%d) outside the ' .

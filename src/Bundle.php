@@ -13,27 +13,13 @@ use function is_array;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class Bundle
 {
-    /** @var non-empty-string */
-    private string $mediaType;
-    private PemCertificate $certificate;
-    private SigstoreBundleContent $content;
-    /** @var list<TransparencyLogEntry> */
-    private array $transparencyLogEntries;
-    /** @var list<non-empty-string> */
-    private array $rfc3161Timestamps;
-
     /**
      * @param non-empty-string           $mediaType
      * @param list<TransparencyLogEntry> $transparencyLogEntries
      * @param list<non-empty-string>     $rfc3161Timestamps
      */
-    private function __construct(string $mediaType, PemCertificate $certificate, SigstoreBundleContent $content, array $transparencyLogEntries, array $rfc3161Timestamps)
+    private function __construct(private string $mediaType, private PemCertificate $certificate, private SigstoreBundleContent $content, private array $transparencyLogEntries, private array $rfc3161Timestamps)
     {
-        $this->mediaType              = $mediaType;
-        $this->certificate            = $certificate;
-        $this->content                = $content;
-        $this->transparencyLogEntries = $transparencyLogEntries;
-        $this->rfc3161Timestamps      = $rfc3161Timestamps;
     }
 
     /** @param array<array-key, mixed> $bundle */

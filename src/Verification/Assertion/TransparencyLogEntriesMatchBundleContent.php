@@ -59,7 +59,7 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
         TransparencyLogEntry $transparencyLogEntry,
         FilenameWithChecksum $file,
         MessageSignature $content,
-        PemCertificate $certificate
+        PemCertificate $certificate,
     ): void {
         /** @var array<array-key, mixed> $body */
         $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
@@ -146,7 +146,7 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
         int $bundleIndex,
         TransparencyLogEntry $transparencyLogEntry,
         DsseEnvelope $content,
-        PemCertificate $certificate
+        PemCertificate $certificate,
     ): void {
         /** @var array<array-key, mixed> $body */
         $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);
@@ -182,7 +182,7 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
         int $bundleIndex,
         TransparencyLogEntry $transparencyLogEntry,
         DsseEnvelope $content,
-        PemCertificate $certificate
+        PemCertificate $certificate,
     ): void {
         /** @var array<array-key, mixed> $body */
         $body = json_decode($transparencyLogEntry->canonicalizedBody(), true);

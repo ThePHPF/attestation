@@ -18,13 +18,9 @@ use const JSON_THROW_ON_ERROR;
 
 class OnDiskBundle implements BundleSource
 {
-    /** @var non-empty-string */
-    private string $bundleFilePath;
-
     /** @param non-empty-string $bundleFilePath */
-    public function __construct(string $bundleFilePath)
+    public function __construct(private string $bundleFilePath)
     {
-        $this->bundleFilePath = $bundleFilePath;
     }
 
     /** @inheritDoc */

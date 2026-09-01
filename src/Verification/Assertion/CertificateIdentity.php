@@ -17,11 +17,8 @@ use function trim;
 
 final class CertificateIdentity implements VerifyBundleCheck
 {
-    private string $expectedCertificateIdentity;
-
-    public function __construct(string $expectedCertificateIdentity)
+    public function __construct(private string $expectedCertificateIdentity)
     {
-        $this->expectedCertificateIdentity = $expectedCertificateIdentity;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

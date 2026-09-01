@@ -35,14 +35,10 @@ final class TrustedRoot
         self::KEY_DETAILS_ED25519,
     ];
 
-    /** @var non-empty-string */
-    private string $trustedRootFilePath;
-
     /** @param non-empty-string $trustedRootFilePath */
-    public function __construct(string $trustedRootFilePath)
+    public function __construct(private string $trustedRootFilePath)
     {
         Assert::fileExists($trustedRootFilePath);
-        $this->trustedRootFilePath = $trustedRootFilePath;
     }
 
     /**
@@ -237,7 +233,7 @@ final class TrustedRoot
     }
 
     /** @param string|array<array-key, string> $issuerSubject */
-    public function resolveCertificateAuthorityCertificate($issuerSubject): ?PemCertificate
+    public function resolveCertificateAuthorityCertificate(string|array $issuerSubject): PemCertificate|null
     {
         foreach ($this->parseDocuments() as $decoded) {
             if (

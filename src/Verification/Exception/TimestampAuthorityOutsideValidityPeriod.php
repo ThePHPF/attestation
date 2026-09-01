@@ -8,7 +8,7 @@ use function sprintf;
 
 class TimestampAuthorityOutsideValidityPeriod extends FailedToVerifyArtifact
 {
-    public static function forIndex(int $bundleIndex, int $genTime, int $tsaValidFrom, ?int $tsaValidTo): self
+    public static function forIndex(int $bundleIndex, int $genTime, int $tsaValidFrom, int|null $tsaValidTo): self
     {
         return new self(sprintf(
             'Attestation %d has an RFC 3161 timestamp (%d) outside the resolved timestamp authority\'s ' .

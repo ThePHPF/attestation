@@ -30,11 +30,8 @@ use function substr;
  */
 final class TransparencyLogEntriesHaveValidCheckpoints implements VerifyBundleCheck
 {
-    private TrustedRoot $trustedRoot;
-
-    public function __construct(TrustedRoot $trustedRoot)
+    public function __construct(private TrustedRoot $trustedRoot)
     {
-        $this->trustedRoot = $trustedRoot;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

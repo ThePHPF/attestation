@@ -17,13 +17,9 @@ use function substr;
 
 final class CertificateExtensionClaims implements VerifyBundleCheck
 {
-    /** @var array<non-empty-string, string> */
-    private array $extensions;
-
     /** @param array<non-empty-string, string> $extensions */
-    public function __construct(array $extensions)
+    public function __construct(private array $extensions)
     {
-        $this->extensions = $extensions;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

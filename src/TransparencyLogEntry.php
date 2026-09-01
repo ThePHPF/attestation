@@ -13,19 +13,6 @@ use function base64_decode;
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class TransparencyLogEntry
 {
-    private int $logIndex;
-    private ?int $integratedTime;
-    /** @var 'hashedrekord'|'dsse'|'intoto' */
-    private string $kind;
-    /** @var non-empty-string */
-    private string $version;
-    /** @var non-empty-string */
-    private string $logId;
-    private string $canonicalizedBody;
-    /** @var non-empty-string|null */
-    private ?string $signedEntryTimestamp;
-    private ?InclusionProof $inclusionProof;
-
     /**
      * @param 'hashedrekord'|'dsse'|'intoto' $kind
      * @param non-empty-string               $version
@@ -33,23 +20,15 @@ final class TransparencyLogEntry
      * @param non-empty-string|null          $signedEntryTimestamp
      */
     private function __construct(
-        int $logIndex,
-        ?int $integratedTime,
-        string $kind,
-        string $version,
-        string $logId,
-        string $canonicalizedBody,
-        ?string $signedEntryTimestamp,
-        ?InclusionProof $inclusionProof
+        private int $logIndex,
+        private int|null $integratedTime,
+        private string $kind,
+        private string $version,
+        private string $logId,
+        private string $canonicalizedBody,
+        private string|null $signedEntryTimestamp,
+        private InclusionProof|null $inclusionProof,
     ) {
-        $this->logIndex             = $logIndex;
-        $this->integratedTime       = $integratedTime;
-        $this->kind                 = $kind;
-        $this->version              = $version;
-        $this->logId                = $logId;
-        $this->canonicalizedBody    = $canonicalizedBody;
-        $this->signedEntryTimestamp = $signedEntryTimestamp;
-        $this->inclusionProof       = $inclusionProof;
     }
 
     /** @param array<array-key, mixed> $transparencyLogEntry */
@@ -124,7 +103,7 @@ final class TransparencyLogEntry
         return $this->logIndex;
     }
 
-    public function integratedTime(): ?int
+    public function integratedTime(): int|null
     {
         return $this->integratedTime;
     }
@@ -153,12 +132,12 @@ final class TransparencyLogEntry
     }
 
     /** @return non-empty-string|null */
-    public function signedEntryTimestamp(): ?string
+    public function signedEntryTimestamp(): string|null
     {
         return $this->signedEntryTimestamp;
     }
 
-    public function inclusionProof(): ?InclusionProof
+    public function inclusionProof(): InclusionProof|null
     {
         return $this->inclusionProof;
     }

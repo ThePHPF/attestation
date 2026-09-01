@@ -34,11 +34,8 @@ use const PKCS7_NOVERIFY;
 /** @link https://www.rfc-editor.org/rfc/rfc3161 */
 final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
 {
-    private TrustedRoot $trustedRoot;
-
-    public function __construct(TrustedRoot $trustedRoot)
+    public function __construct(private TrustedRoot $trustedRoot)
     {
-        $this->trustedRoot = $trustedRoot;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

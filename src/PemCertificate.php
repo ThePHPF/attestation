@@ -16,13 +16,9 @@ use function wordwrap;
  */
 final class PemCertificate
 {
-    /** @var non-empty-string */
-    private string $base64EncodedDerBytes;
-
     /** @param non-empty-string $base64EncodedDerBytes */
-    private function __construct(string $base64EncodedDerBytes)
+    private function __construct(private string $base64EncodedDerBytes)
     {
-        $this->base64EncodedDerBytes = $base64EncodedDerBytes;
     }
 
     /** @param non-empty-string $base64EncodedDerBytes */

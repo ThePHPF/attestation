@@ -134,7 +134,7 @@ class VerifyBundle extends Command
     }
 
     /** @return non-empty-string|null */
-    private function readTrustedRootOption(InputInterface $input): ?string
+    private function readTrustedRootOption(InputInterface $input): string|null
     {
         $trustedRoot = $input->getOption('trusted-root');
         Assert::nullOrString($trustedRoot);

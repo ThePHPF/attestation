@@ -20,11 +20,8 @@ final class CertificateHasATrustedSignedCertificateTimestamp implements VerifyBu
     /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */
     private const CT_PRECERT_SCTS_EXTENSION_OID_DER = "\x2b\x06\x01\x04\x01\xd6\x79\x02\x04\x02";
 
-    private TrustedRoot $trustedRoot;
-
-    public function __construct(TrustedRoot $trustedRoot)
+    public function __construct(private TrustedRoot $trustedRoot)
     {
-        $this->trustedRoot = $trustedRoot;
     }
 
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void
