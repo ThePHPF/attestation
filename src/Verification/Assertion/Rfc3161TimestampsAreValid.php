@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Der;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidRfc3161TimestampFormat;
 use ThePhpFoundation\Attestation\Verification\Exception\Rfc3161TimestampVerificationFailed;
+use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityCertificateOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampAuthorityOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\Exception\TimestampOutsideCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\TrustedRoot;
@@ -64,7 +65,7 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
     /** @param non-empty-string $timestampToken */
     private function verifyAndExtractGenTime(int $bundleIndex, string $timestampToken): int
     {
-        [$validFor, $tstInfo] = $this->verifyCmsSignatureAgainstKnownTimestampAuthorities($bundleIndex, $timestampToken);
+        [$validFor, $tstInfo, $certificateValidFor] = $this->verifyCmsSignatureAgainstKnownTimestampAuthorities($bundleIndex, $timestampToken);
 
         $genTime = $this->extractGeneralizedTime($bundleIndex, $tstInfo);
 
@@ -75,13 +76,22 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
             throw TimestampAuthorityOutsideValidityPeriod::forIndex($bundleIndex, $genTime, $validFor['start'], $validFor['end']);
         }
 
+        if ($genTime < $certificateValidFor['start'] || $genTime > $certificateValidFor['end']) {
+            throw TimestampAuthorityCertificateOutsideValidityPeriod::forIndex(
+                $bundleIndex,
+                $genTime,
+                $certificateValidFor['start'],
+                $certificateValidFor['end'],
+            );
+        }
+
         return $genTime;
     }
 
     /**
      * @param non-empty-string $timestampResponse
      *
-     * @return array{0: array{start: int, end: int|null}, 1: non-empty-string} [matched TSA's validFor, TSTInfo DER bytes]
+     * @return array{0: array{start: int, end: int|null}, 1: non-empty-string, 2: array{start: int, end: int}}
      */
     private function verifyCmsSignatureAgainstKnownTimestampAuthorities(int $bundleIndex, string $timestampResponse): array
     {
@@ -145,7 +155,21 @@ final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
 
         foreach ($candidates as $candidate) {
             if (in_array($signingCertificateDer, $candidate['certChainDer'], true)) {
-                return [$candidate['validFor'], $tstInfo];
+                $signingCertificateInfo = openssl_x509_parse($signersPem);
+                Assert::isArray($signingCertificateInfo);
+                Assert::keyExists($signingCertificateInfo, 'validFrom_time_t');
+                Assert::integer($signingCertificateInfo['validFrom_time_t']);
+                Assert::keyExists($signingCertificateInfo, 'validTo_time_t');
+                Assert::integer($signingCertificateInfo['validTo_time_t']);
+
+                return [
+                    $candidate['validFor'],
+                    $tstInfo,
+                    [
+                        'start' => $signingCertificateInfo['validFrom_time_t'],
+                        'end' => $signingCertificateInfo['validTo_time_t'],
+                    ],
+                ];
             }
         }
 
