@@ -27,6 +27,8 @@ use function strrev;
  *
  * Requires ext-bcmath; callers must check extension_loaded('bcmath') first.
  *
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
  * @link https://github.com/sigstore/sigstore-js/blob/main/packages/conformance/src/commands/verify-bundle.ts
  *       sigstore-js hits the exact same ext-openssl/Node crypto gap and works around it with the `elliptic`
  *       npm package; this does the equivalent raw point arithmetic using ext-bcmath instead of a dependency.

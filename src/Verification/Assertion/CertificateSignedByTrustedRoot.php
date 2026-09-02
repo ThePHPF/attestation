@@ -15,6 +15,7 @@ use function is_array;
 use function openssl_x509_parse;
 use function openssl_x509_verify;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class CertificateSignedByTrustedRoot implements VerifyBundleCheck
 {
     public function __construct(private TrustedRoot $trustedRoot)

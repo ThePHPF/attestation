@@ -24,6 +24,8 @@ use function substr;
 /**
  * Implements the `verify-bundle` command of the Sigstore conformance CLI protocol.
  *
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
  * @link https://github.com/sigstore/sigstore-conformance/blob/main/docs/cli_protocol.md#verify-bundle
  */
 class VerifyBundle extends Command

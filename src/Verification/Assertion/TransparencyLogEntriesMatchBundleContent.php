@@ -21,6 +21,7 @@ use function hash;
 use function hash_equals;
 use function json_decode;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleCheck
 {
     private const HASHEDREKORD_VERSION_0_0_2 = '0.0.2';

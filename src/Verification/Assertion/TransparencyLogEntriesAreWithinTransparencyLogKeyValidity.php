@@ -9,6 +9,7 @@ use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogKeyOutsideValidityPeriod;
 use ThePhpFoundation\Attestation\Verification\TrustedRoot;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class TransparencyLogEntriesAreWithinTransparencyLogKeyValidity implements VerifyBundleCheck
 {
     public function __construct(private TrustedRoot $trustedRoot)

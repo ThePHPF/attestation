@@ -15,6 +15,7 @@ use function ord;
 use function strlen;
 use function substr;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class CertificateHasATrustedSignedCertificateTimestamp implements VerifyBundleCheck
 {
     /** @link https://www.rfc-editor.org/rfc/rfc6962#section-3.3 */

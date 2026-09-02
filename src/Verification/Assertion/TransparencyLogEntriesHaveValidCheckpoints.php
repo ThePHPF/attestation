@@ -25,6 +25,8 @@ use function strlen;
 use function substr;
 
 /**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
  * @link https://github.com/sigstore/rekor/blob/main/pkg/util/checkpoint.go
  * @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go
  */

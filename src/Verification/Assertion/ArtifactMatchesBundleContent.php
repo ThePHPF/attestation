@@ -36,6 +36,7 @@ use function openssl_verify;
 
 use const OPENSSL_ALGO_SHA256;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class ArtifactMatchesBundleContent implements VerifyBundleCheck
 {
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

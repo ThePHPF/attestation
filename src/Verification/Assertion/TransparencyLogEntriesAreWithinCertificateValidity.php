@@ -11,6 +11,7 @@ use Webmozart\Assert\Assert;
 
 use function openssl_x509_parse;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class TransparencyLogEntriesAreWithinCertificateValidity implements VerifyBundleCheck
 {
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void

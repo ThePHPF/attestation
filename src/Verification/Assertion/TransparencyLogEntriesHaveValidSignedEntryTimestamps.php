@@ -17,7 +17,11 @@ use function json_encode;
 
 use const JSON_UNESCAPED_SLASHES;
 
-/** @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go */
+/**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
+ * @link https://github.com/sigstore/rekor/blob/main/pkg/util/signed_note.go
+ */
 final class TransparencyLogEntriesHaveValidSignedEntryTimestamps implements VerifyBundleCheck
 {
     public function __construct(private TrustedRoot $trustedRoot)

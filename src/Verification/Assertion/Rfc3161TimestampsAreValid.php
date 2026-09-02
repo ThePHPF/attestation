@@ -39,7 +39,11 @@ use const OPENSSL_ENCODING_DER;
 use const PKCS7_BINARY;
 use const PKCS7_NOVERIFY;
 
-/** @link https://www.rfc-editor.org/rfc/rfc3161 */
+/**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
+ * @link https://www.rfc-editor.org/rfc/rfc3161
+ */
 final class Rfc3161TimestampsAreValid implements VerifyBundleCheck
 {
     private const HASH_ALGORITHM_OIDS = [

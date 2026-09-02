@@ -13,7 +13,11 @@ use Webmozart\Assert\Assert;
 use function array_key_exists;
 use function openssl_x509_parse;
 
-/** Uses the plain-string Fulcio V1 issuer OID */
+/**
+ * Uses the plain-string Fulcio V1 issuer OID.
+ *
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ */
 final class CertificateOidcIssuer implements VerifyBundleCheck
 {
     public function __construct(private string $expectedOidcIssuer)

@@ -13,6 +13,8 @@ use function hash;
 use function hash_equals;
 
 /**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
  * @link https://www.rfc-editor.org/rfc/rfc6962#section-2.1.1
  * @link https://github.com/transparency-dev/merkle/blob/main/proof/verify.go
  */

@@ -12,6 +12,7 @@ use function str_replace;
 use function strlen;
 use function substr;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class Der
 {
     public const TAG_BOOLEAN            = 0x01;

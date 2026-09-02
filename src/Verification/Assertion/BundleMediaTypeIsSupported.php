@@ -10,6 +10,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleMediaTy
 
 use function in_array;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class BundleMediaTypeIsSupported implements VerifyBundleCheck
 {
     private const SUPPORTED_BUNDLE_MEDIA_TYPES = [

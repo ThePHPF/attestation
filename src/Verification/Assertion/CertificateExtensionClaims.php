@@ -16,6 +16,7 @@ use function ord;
 use function strlen;
 use function substr;
 
+/** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class CertificateExtensionClaims implements VerifyBundleCheck
 {
     /** @param array<non-empty-string, string> $extensions */

@@ -24,7 +24,11 @@ use function openssl_x509_parse;
 use function strtotime;
 use function trim;
 
-/** @phpstan-type TransparencyLogKey array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}} */
+/**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
+ * @phpstan-type TransparencyLogKey array{publicKey: PemPublicKey, keyId: non-empty-string, keyDetails: non-empty-string, validFor: array{start: int, end: int|null}}
+ */
 final class TrustedRoot
 {
     public const KEY_DETAILS_ECDSA_P256_SHA_256 = 'PKIX_ECDSA_P256_SHA_256';

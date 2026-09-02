@@ -15,7 +15,11 @@ use function substr;
 
 use const OPENSSL_ALGO_SHA256;
 
-/** @phpstan-import-type TransparencyLogKey from TrustedRoot */
+/**
+ * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
+ *
+ * @phpstan-import-type TransparencyLogKey from TrustedRoot
+ */
 final class TransparencyLogSignature
 {
     private const ED25519_SPKI_DER_PREFIX_LENGTH = 12;
