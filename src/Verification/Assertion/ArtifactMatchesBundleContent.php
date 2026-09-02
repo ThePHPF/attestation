@@ -106,11 +106,12 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
     /**
      * ext-openssl's openssl_verify() always hashes the message it's given internally, so it can't verify a
      * signature against an already-computed digest when the real artifact isn't available (DIGEST mode).
-     * Falls back to raw ECDSA point arithmetic via ext-bcmath, which is optional (see composer.json).
+     * Falls back to raw ECDSA point arithmetic via ext-gmp (preferred) or ext-bcmath, both optional
+     * (see composer.json) - see RawEcdsaDigestVerifier for why ext-gmp is preferred when available.
      */
     private function verifyMessageSignatureAgainstDigestAlone(int $bundleIndex, FilenameWithChecksum $file, OpenSSLAsymmetricKey $publicKey, MessageSignature $content): void
     {
-        if (! extension_loaded('bcmath')) {
+        if (! extension_loaded('gmp') && ! extension_loaded('bcmath')) {
             throw NoBcmath::new();
         }
 

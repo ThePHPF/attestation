@@ -7,31 +7,24 @@ namespace ThePhpFoundation\Attestation\Verification;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
-use function bcadd;
-use function bccomp;
-use function bcdiv;
-use function bcmod;
-use function bcmul;
-use function bcpowmod;
-use function bcsub;
 use function bin2hex;
-use function hexdec;
+use function extension_loaded;
 use function ltrim;
-use function str_split;
-use function strlen;
-use function strrev;
 
 /**
  * Verifies an ECDSA signature against an already-computed digest (rather than the signed message itself),
  * which ext-openssl has no way to do: openssl_verify() always hashes the message it's given internally.
  *
- * Requires ext-bcmath; callers must check extension_loaded('bcmath') first.
+ * Prefers ext-gmp when available (consistently fast regardless of PHP version - unlike ext-bcmath, whose
+ * performance varies a great deal by PHP version, see BcMathEcdsaDigestVerifierBackend), falling back to
+ * ext-bcmath otherwise. Callers must check extension_loaded('gmp') || extension_loaded('bcmath') first.
  *
  * @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks
  *
  * @link https://github.com/sigstore/sigstore-js/blob/main/packages/conformance/src/commands/verify-bundle.ts
  *       sigstore-js hits the exact same ext-openssl/Node crypto gap and works around it with the `elliptic`
- *       npm package; this does the equivalent raw point arithmetic using ext-bcmath instead of a dependency.
+ *       npm package; this does the equivalent raw point arithmetic using ext-gmp/ext-bcmath instead of a
+ *       dependency.
  */
 final class RawEcdsaDigestVerifier
 {
@@ -69,42 +62,20 @@ final class RawEcdsaDigestVerifier
         Assert::keyExists(self::CURVES, $curveName);
         $curve = self::CURVES[$curveName];
 
-        $p = self::hex2dec($curve['p']);
-        $a = self::hex2dec($curve['a']);
-        $n = self::hex2dec($curve['n']);
-
         [$rHex, $sHex] = self::parseSignature($signatureDer);
 
-        $r = self::hex2dec($rHex);
-        $s = self::hex2dec($sHex);
+        $backend = self::backend();
 
-        if (bccomp($r, '1') < 0 || bccomp($r, bcsub($n, '1')) > 0) {
-            return false;
+        return $backend->verify($curve, $digest, $rHex, $sHex, $qxBytes, $qyBytes);
+    }
+
+    private static function backend(): EcdsaDigestVerifierBackend
+    {
+        if (extension_loaded('gmp')) {
+            return new GmpEcdsaDigestVerifierBackend();
         }
 
-        if (bccomp($s, '1') < 0 || bccomp($s, bcsub($n, '1')) > 0) {
-            return false;
-        }
-
-        $e = self::hex2dec(bin2hex($digest));
-
-        $w  = self::modinv($s, $n);
-        $u1 = bcmod(bcmul($e, $w), $n);
-        $u2 = bcmod(bcmul($r, $w), $n);
-
-        $basePoint   = [self::hex2dec($curve['gx']), self::hex2dec($curve['gy'])];
-        $publicKey   = [self::hex2dec(bin2hex($qxBytes)), self::hex2dec(bin2hex($qyBytes))];
-        $u1BasePoint = self::pointMultiply($basePoint, $u1, $p, $a);
-        $u2PublicKey = self::pointMultiply($publicKey, $u2, $p, $a);
-
-        $sum = self::pointAdd($u1BasePoint, $u2PublicKey, $p, $a);
-        if ($sum === null) {
-            return false;
-        }
-
-        [$x1] = $sum;
-
-        return bccomp(bcmod($x1, $n), $r) === 0;
+        return new BcMathEcdsaDigestVerifierBackend();
     }
 
     /** @return array{0: non-empty-string, 1: non-empty-string} [r as hex, s as hex] */
@@ -126,116 +97,5 @@ final class RawEcdsaDigestVerifier
         Assert::stringNotEmpty($sHex);
 
         return [$rHex, $sHex];
-    }
-
-    /** @return numeric-string */
-    private static function hex2dec(string $hex): string
-    {
-        $dec = '0';
-        foreach (str_split($hex) as $char) {
-            $digit = (string) hexdec($char);
-
-            $dec = bcadd(bcmul($dec, '16'), $digit);
-        }
-
-        return $dec;
-    }
-
-    /**
-     * @param numeric-string $a
-     * @param numeric-string $m
-     *
-     * @return numeric-string
-     */
-    private static function modinv(string $a, string $m): string
-    {
-        // a^-1 mod m == a^(m-2) mod m, by Fermat's little theorem (valid since m is prime for both P and N here)
-        return bcpowmod($a, bcsub($m, '2'), $m);
-    }
-
-    /**
-     * @param array{0: numeric-string, 1: numeric-string}|null $p1
-     * @param array{0: numeric-string, 1: numeric-string}|null $p2
-     * @param numeric-string                                   $p
-     * @param numeric-string                                   $a
-     *
-     * @return array{0: numeric-string, 1: numeric-string}|null null represents the point at infinity
-     */
-    private static function pointAdd(array|null $p1, array|null $p2, string $p, string $a): array|null
-    {
-        if ($p1 === null) {
-            return $p2;
-        }
-
-        if ($p2 === null) {
-            return $p1;
-        }
-
-        [$x1, $y1] = $p1;
-        [$x2, $y2] = $p2;
-
-        if (bccomp($x1, $x2) === 0) {
-            if (bccomp(bcmod(bcadd($y1, $y2), $p), '0') === 0) {
-                return null;
-            }
-
-            $numerator   = bcmod(bcadd(bcmul('3', bcmul($x1, $x1)), $a), $p);
-            $denominator = self::modinv(bcmod(bcmul('2', $y1), $p), $p);
-        } else {
-            $numerator   = bcmod(bcsub($y2, $y1), $p);
-            $denominator = self::modinv(bcmod(bcsub($x2, $x1), $p), $p);
-        }
-
-        $lambda = bcmod(bcmul($numerator, $denominator), $p);
-
-        $x3 = bcmod(bcsub(bcsub(bcmul($lambda, $lambda), $x1), $x2), $p);
-        $y3 = bcmod(bcsub(bcmul($lambda, bcsub($x1, $x3)), $y1), $p);
-
-        if (bccomp($x3, '0') < 0) {
-            $x3 = bcadd($x3, $p);
-        }
-
-        if (bccomp($y3, '0') < 0) {
-            $y3 = bcadd($y3, $p);
-        }
-
-        return [$x3, $y3];
-    }
-
-    /**
-     * @param array{0: numeric-string, 1: numeric-string} $point
-     * @param numeric-string                              $scalar
-     * @param numeric-string                              $p
-     * @param numeric-string                              $a
-     *
-     * @return array{0: numeric-string, 1: numeric-string}|null
-     */
-    private static function pointMultiply(array $point, string $scalar, string $p, string $a): array|null
-    {
-        $result = null;
-        $addend = $point;
-        $bits   = strrev(self::decToBin($scalar));
-
-        for ($i = 0; $i < strlen($bits); $i++) {
-            if ($bits[$i] === '1') {
-                $result = self::pointAdd($result, $addend, $p, $a);
-            }
-
-            $addend = self::pointAdd($addend, $addend, $p, $a);
-        }
-
-        return $result;
-    }
-
-    /** @param numeric-string $decimal */
-    private static function decToBin(string $decimal): string
-    {
-        $bits = '';
-        while (bccomp($decimal, '0') > 0) {
-            $bits    = bcmod($decimal, '2') . $bits;
-            $decimal = bcdiv($decimal, '2', 0);
-        }
-
-        return $bits === '' ? '0' : $bits;
     }
 }
