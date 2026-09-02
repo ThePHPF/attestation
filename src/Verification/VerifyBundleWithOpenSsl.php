@@ -25,10 +25,10 @@ use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
-    public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
+    private const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
     /** @param list<VerifyBundleCheck> $checks */
-    public function __construct(private array $checks)
+    private function __construct(private array $checks)
     {
     }
 
