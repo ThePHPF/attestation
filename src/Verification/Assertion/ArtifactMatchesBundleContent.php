@@ -13,7 +13,7 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\Verification\Exception\CannotVerifyMessageSignatureWithoutArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
 use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
-use ThePhpFoundation\Attestation\Verification\Exception\NoBcmath;
+use ThePhpFoundation\Attestation\Verification\Exception\NoGmpOrBcmath;
 use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
 use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedBundleContent;
@@ -112,7 +112,7 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
     private function verifyMessageSignatureAgainstDigestAlone(int $bundleIndex, FilenameWithChecksum $file, OpenSSLAsymmetricKey $publicKey, MessageSignature $content): void
     {
         if (! extension_loaded('gmp') && ! extension_loaded('bcmath')) {
-            throw NoBcmath::new();
+            throw NoGmpOrBcmath::new();
         }
 
         $details = openssl_pkey_get_details($publicKey);
