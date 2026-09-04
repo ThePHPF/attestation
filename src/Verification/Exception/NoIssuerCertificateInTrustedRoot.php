@@ -11,7 +11,7 @@ use function sprintf;
 class NoIssuerCertificateInTrustedRoot extends FailedToVerifyArtifact
 {
     /** @param array<array-key,string>|string $issuer */
-    public static function fromIssuer($issuer): self
+    public static function fromIssuer(array|string $issuer): self
     {
         return new self(sprintf(
             'Could not find a trusted root certificate for issuer %s',

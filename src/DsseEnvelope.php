@@ -11,25 +11,15 @@ use function sprintf;
 use function strlen;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
-final class DsseEnvelope
+final class DsseEnvelope implements SigstoreBundleContent
 {
-    /** @var non-empty-string */
-    public string $payload;
-    /** @var non-empty-string */
-    public string $payloadType;
-    /** @var non-empty-string */
-    public string $signature;
-
     /**
      * @param non-empty-string $payload
      * @param non-empty-string $payloadType
      * @param non-empty-string $signature
      */
-    private function __construct(string $payload, string $payloadType, string $signature)
+    private function __construct(private string $payload, private string $payloadType, private string $signature)
     {
-        $this->payload     = $payload;
-        $this->payloadType = $payloadType;
-        $this->signature   = $signature;
     }
 
     /** @param array<array-key, mixed> $dsseEnvelope */
@@ -75,5 +65,23 @@ final class DsseEnvelope
             strlen($this->payload),
             $this->payload,
         );
+    }
+
+    /** @return non-empty-string */
+    public function payload(): string
+    {
+        return $this->payload;
+    }
+
+    /** @return non-empty-string */
+    public function payloadType(): string
+    {
+        return $this->payloadType;
+    }
+
+    /** @return non-empty-string */
+    public function signature(): string
+    {
+        return $this->signature;
     }
 }

@@ -4,276 +4,91 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation\Verification;
 
-use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
-use ThePhpFoundation\Attestation\PemCertificate;
-use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidDerEncodedStringLength;
-use ThePhpFoundation\Attestation\Verification\Exception\InvalidSubjectDefinition;
-use ThePhpFoundation\Attestation\Verification\Exception\IssuerCertificateVerificationFailed;
-use ThePhpFoundation\Attestation\Verification\Exception\MismatchingExtensionValues;
-use ThePhpFoundation\Attestation\Verification\Exception\NoIssuerCertificateInTrustedRoot;
-use ThePhpFoundation\Attestation\Verification\Exception\NoOpenSsl;
-use ThePhpFoundation\Attestation\Verification\Exception\SignatureVerificationFailed;
-use Webmozart\Assert\Assert;
-
-use function array_key_exists;
-use function count;
-use function explode;
-use function extension_loaded;
-use function file_get_contents;
-use function hash_equals;
-use function is_array;
-use function is_string;
-use function json_decode;
-use function openssl_pkey_get_public;
-use function openssl_verify;
-use function openssl_x509_parse;
-use function openssl_x509_verify;
-use function ord;
-use function strlen;
-use function substr;
-use function trim;
-
-use const OPENSSL_ALGO_SHA256;
+use ThePhpFoundation\Attestation\Verification\Assertion\ArtifactMatchesBundleContent;
+use ThePhpFoundation\Attestation\Verification\Assertion\BundleHasAtLeastOneTimestamp;
+use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateExtensionClaims;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSignedCertificateTimestamp;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateIdentity;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateOidcIssuer;
+use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
+use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidCheckpoints;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidInclusionProof;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidSignedEntryTimestamps;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesMatchBundleContent;
+use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
 
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
-    public const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
+    private const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
 
-    /** @var non-empty-string */
-    private string $trustedRootFilePath;
-
-    /** @param non-empty-string $trustedRootFilePath */
-    public function __construct(string $trustedRootFilePath)
+    /** @param list<VerifyBundleCheck> $checks */
+    private function __construct(private array $checks)
     {
-        Assert::fileExists($trustedRootFilePath);
-        $this->trustedRootFilePath = $trustedRootFilePath;
     }
 
-    public static function factory(): self
+    /**
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
+     */
+    public static function factory(array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
     {
-        return new self(self::TRUSTED_ROOT_FILE_PATH);
+        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity, $expectedOidcIssuer);
+    }
+
+    /**
+     * @param non-empty-string                $trustedRootFilePath
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
+     */
+    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
+    {
+        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity, $expectedOidcIssuer));
+    }
+
+    /**
+     * @param array<non-empty-string, string> $extensions
+     * @param non-empty-string                $expectedCertificateIdentity
+     * @param non-empty-string                $expectedOidcIssuer
+     *
+     * @return list<VerifyBundleCheck>
+     */
+    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): array
+    {
+        return [
+            new BundleMediaTypeIsSupported(),
+            new BundleHasAtLeastOneTimestamp(),
+            new TransparencyLogEntriesHaveValidLogIndex(),
+            new TransparencyLogEntriesAreWithinCertificateValidity(),
+            new TransparencyLogEntriesAreWithinTransparencyLogKeyValidity($trustedRoot),
+            new Rfc3161TimestampsAreValid($trustedRoot),
+            new TransparencyLogEntriesHaveValidInclusionProof(),
+            new TransparencyLogEntriesHaveValidCheckpoints($trustedRoot),
+            new TransparencyLogEntriesHaveValidSignedEntryTimestamps($trustedRoot),
+            new TransparencyLogEntriesMatchBundleContent(),
+            new CertificateSignedByTrustedRoot($trustedRoot),
+            new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot),
+            new CertificateExtensionClaims($extensions),
+            new CertificateOidcIssuer($expectedOidcIssuer),
+            new CertificateIdentity($expectedCertificateIdentity),
+            new ArtifactMatchesBundleContent(),
+        ];
     }
 
     /** @inheritDoc */
-    public function verify(
-        array $bundles,
-        FilenameWithChecksum $file,
-        string $expectedSubjectName,
-        array $extensionsToVerify
-    ): void {
+    public function verify(array $bundles, FilenameWithChecksum $file): void
+    {
         foreach ($bundles as $bundleIndex => $bundle) {
-            /**
-             * Useful references. Whilst we don't do the full verification that
-             * `gh attestation verify` would (since we don't want to re-invent
-             * the wheel), we can do some basic check of the DSSE Envelope.
-             * We'll check the payload digest matches our expectation, and
-             * verify the signature with the certificate.
-             *
-             *  - https://github.com/cli/cli/blob/234d2effd545fb9d72ea77aa648caa499aecaa6e/pkg/cmd/attestation/verify/verify.go#L225-L256
-             *  - https://docs.sigstore.dev/logging/verify-release/
-             *  - https://github.com/secure-systems-lab/dsse/blob/master/protocol.md#protocol
-             */
-            $this->assertCertificateSignedByTrustedRoot($bundle);
-
-            $this->assertCertificateExtensionClaims($bundle, $extensionsToVerify);
-
-            $this->assertDigestFromAttestationMatchesActual($file, $expectedSubjectName, $bundle);
-
-            $this->verifyDsseEnvelopeSignature($bundleIndex, $bundle);
-        }
-    }
-
-    private function assertCertificateSignedByTrustedRoot(Bundle $bundle): void
-    {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
-        Assert::isArray($attestationCertificateInfo);
-        Assert::keyExists($attestationCertificateInfo, 'issuer');
-        if (is_array($attestationCertificateInfo['issuer'])) {
-            Assert::allStringNotEmpty($attestationCertificateInfo['issuer']);
-        } else {
-            Assert::stringNotEmpty($attestationCertificateInfo['issuer']);
-        }
-
-        $trustedRootCert = file_get_contents($this->trustedRootFilePath);
-        Assert::stringNotEmpty($trustedRootCert);
-        $trustedRootJsonLines = explode("\n", trim($trustedRootCert));
-
-        /**
-         * Now go through our trusted root certificates and attempt to verify that the certificate was signed by an
-         * in-date trusted root certificate. The root certificates should be periodically and frequently updated using:
-         *
-         *     gh attestation trusted-root > resources/trusted-root.jsonl
-         *
-         * And verifying the contents afterwards to ensure they have not been compromised. This list of JSON blobs may
-         * have multiple certificates (e.g. root certificates, intermediate certificates, expired certificates, etc.)
-         * so we should loop over to find the correct certificate used to sign the attestation certificate.
-         */
-        foreach ($trustedRootJsonLines as $jsonLine) {
-            /** @var mixed $decoded */
-            $decoded = json_decode($jsonLine, true);
-
-            // No certificate authorities defined in this JSON line, skip it...
-            if (
-                ! is_array($decoded)
-                || ! array_key_exists('certificateAuthorities', $decoded)
-                || ! is_array($decoded['certificateAuthorities'])
-            ) {
-                continue;
+            foreach ($this->checks as $check) {
+                $check->assert($file, $bundleIndex, $bundle);
             }
-
-            /** @var mixed $certificateAuthority */
-            foreach ($decoded['certificateAuthorities'] as $certificateAuthority) {
-                // We don't have a certificate chain defined, skip it...
-                if (
-                    ! is_array($certificateAuthority)
-                    || ! array_key_exists('certChain', $certificateAuthority)
-                    || ! is_array($certificateAuthority['certChain'])
-                    || ! array_key_exists('certificates', $certificateAuthority['certChain'])
-                    || ! is_array($certificateAuthority['certChain']['certificates'])
-                ) {
-                    continue;
-                }
-
-                /** @var mixed $caCertificateWrapper */
-                foreach ($certificateAuthority['certChain']['certificates'] as $caCertificateWrapper) {
-                    // Certificate is not in the expected format, i.e. no rawBytes key, skip it...
-                    if (
-                        ! is_array($caCertificateWrapper)
-                        || ! array_key_exists('rawBytes', $caCertificateWrapper)
-                        || ! is_string($caCertificateWrapper['rawBytes'])
-                        || $caCertificateWrapper['rawBytes'] === ''
-                    ) {
-                        continue;
-                    }
-
-                    $caCertificateString = PemCertificate::fromBase64EncodedDerBytes(
-                        $caCertificateWrapper['rawBytes'],
-                    )->decoratedCertificate();
-
-                    $caCertificateInfo = openssl_x509_parse($caCertificateString);
-                    Assert::isArray($caCertificateInfo);
-                    Assert::keyExists($caCertificateInfo, 'subject');
-
-                    // If the CA certificate subject is not the issuer of the attestation certificate,
-                    // this was not the cert we were looking for, skip it...
-                    if ($caCertificateInfo['subject'] !== $attestationCertificateInfo['issuer']) {
-                        continue;
-                    }
-
-                    // Finally, verify that the located CA cert was used to sign the attestation certificate
-                    if (openssl_x509_verify($bundle->certificate->decoratedCertificate(), $caCertificateString) !== 1) {
-                        /** @psalm-suppress MixedArgument */
-                        throw IssuerCertificateVerificationFailed::fromIssuer($attestationCertificateInfo['issuer']);
-                    }
-
-                    return;
-                }
-            }
-        }
-
-        /**
-         * If we got here, we skipped all the certificates in the trusted root collection for various reasons; so we
-         * therefore cannot trust the attestation certificate.
-         *
-         * @psalm-suppress MixedArgument
-         */
-        throw NoIssuerCertificateInTrustedRoot::fromIssuer($attestationCertificateInfo['issuer']);
-    }
-
-    /** @param array<non-empty-string, string> $extensions */
-    private function assertCertificateExtensionClaims(Bundle $bundle, array $extensions): void
-    {
-        $attestationCertificateInfo = openssl_x509_parse($bundle->certificate->decoratedCertificate());
-        Assert::isArray($attestationCertificateInfo);
-        Assert::keyExists($attestationCertificateInfo, 'extensions');
-        Assert::isArray($attestationCertificateInfo['extensions']);
-
-        /**
-         * See {@link https://github.com/sigstore/fulcio/blob/main/docs/oid-info.md#136141572641--fulcio} for details
-         * on the Fulcio extension keys; note the values are DER-encoded strings; the ASN.1 tag is UTF8String (0x0C).
-         *
-         * Check the extension values are what we expect; these are hard-coded, as we don't expect them
-         * to change unless the namespace/repo name change, etc.
-         */
-        foreach ($extensions as $extension => $expectedValue) {
-            Assert::keyExists($attestationCertificateInfo['extensions'], $extension);
-            Assert::stringNotEmpty($attestationCertificateInfo['extensions'][$extension]);
-            $actualValue = $attestationCertificateInfo['extensions'][$extension];
-
-            // First character (the ASN.1 tag) is expected to be UTF8String (0x0C)
-            if (ord($actualValue[0]) !== 0x0C) {
-                throw MismatchingExtensionValues::from($extension, $expectedValue, $actualValue);
-            }
-
-            /**
-             * Second character is expected to be the length of the actual value
-             * as long as they are less than 127 bytes (short form)
-             *
-             * @link https://www.oss.com/asn1/resources/asn1-made-simple/asn1-quick-reference/basic-encoding-rules.html#Lengths
-             */
-            $expectedValueLength = ord($actualValue[1]);
-            if (strlen($actualValue) !== 2 + $expectedValueLength) {
-                throw InvalidDerEncodedStringLength::fromDerString($actualValue, 2 + $expectedValueLength);
-            }
-
-            $derDecodedValue = substr($actualValue, 2, $expectedValueLength);
-            if ($derDecodedValue !== $expectedValue) {
-                throw MismatchingExtensionValues::from($extension, $expectedValue, $derDecodedValue);
-            }
-        }
-    }
-
-    private function verifyDsseEnvelopeSignature(int $bundleIndex, Bundle $bundle): void
-    {
-        if (! extension_loaded('openssl')) {
-            throw NoOpenssl::new();
-        }
-
-        $publicKey = openssl_pkey_get_public($bundle->certificate->decoratedCertificate());
-        Assert::notFalse($publicKey);
-
-        if (
-            openssl_verify(
-                $bundle->dsseEnvelope->preAuthenticationEncoding(),
-                $bundle->dsseEnvelope->signature,
-                $publicKey,
-                OPENSSL_ALGO_SHA256,
-            ) !== 1
-        ) {
-            throw SignatureVerificationFailed::forIndex($bundleIndex);
-        }
-    }
-
-    /** @param non-empty-string $expectedSubjectName */
-    private function assertDigestFromAttestationMatchesActual(FilenameWithChecksum $file, string $expectedSubjectName, Bundle $bundle): void
-    {
-        /** @var mixed $decodedPayload */
-        $decodedPayload = json_decode($bundle->dsseEnvelope->payload, true);
-
-        if (
-            ! is_array($decodedPayload)
-            || ! array_key_exists('subject', $decodedPayload)
-            || ! is_array($decodedPayload['subject'])
-            || count($decodedPayload['subject']) !== 1
-            || ! array_key_exists(0, $decodedPayload['subject'])
-            || ! is_array($decodedPayload['subject'][0])
-            || ! array_key_exists('name', $decodedPayload['subject'][0])
-            || $decodedPayload['subject'][0]['name'] !== $expectedSubjectName
-            || ! array_key_exists('digest', $decodedPayload['subject'][0])
-            || ! is_array($decodedPayload['subject'][0]['digest'])
-            || ! array_key_exists('sha256', $decodedPayload['subject'][0]['digest'])
-            || ! is_string($decodedPayload['subject'][0]['digest']['sha256'])
-            || $decodedPayload['subject'][0]['digest']['sha256'] === ''
-        ) {
-            throw InvalidSubjectDefinition::new();
-        }
-
-        $expected = $file->checksum();
-        $actual   = $decodedPayload['subject'][0]['digest']['sha256'];
-        if (! hash_equals($expected, $actual)) {
-            throw DigestMismatch::fromChecksumMismatch($expected, $actual);
         }
     }
 }
