@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace ThePhpFoundation\Attestation\Verification;
 
 use ThePhpFoundation\Attestation\PemPublicKey;
+use ThePhpFoundation\Attestation\Verification\Exception\NoSodium;
 use Webmozart\Assert\Assert;
 
+use function extension_loaded;
 use function openssl_pkey_get_public;
 use function openssl_verify;
 use function sodium_crypto_sign_verify_detached;
@@ -33,6 +35,10 @@ final class TransparencyLogSignature
     public static function verify(array $transparencyLogKey, string $signedContent, string $signature): bool
     {
         if ($transparencyLogKey['keyDetails'] === TrustedRoot::KEY_DETAILS_ED25519) {
+            if (! extension_loaded('sodium')) {
+                throw NoSodium::new();
+            }
+
             return sodium_crypto_sign_verify_detached(
                 $signature,
                 $signedContent,
