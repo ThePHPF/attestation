@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
 use ThePhpFoundation\Attestation\BundleSource\Exception\BundleResponseTooLarge;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToDecompressBundle;
+use ThePhpFoundation\Attestation\BundleSource\Exception\UntrustedBundleUrl;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use Webmozart\Assert\Assert;
 
@@ -24,14 +25,19 @@ final class DownloadGitHubBundleTest extends TestCase
 
     private function downloaderReturning(string $bundleResponseBody): DownloadGitHubBundle
     {
+        return $this->downloaderWithBundleUrl(self::BUNDLE_URL, $bundleResponseBody);
+    }
+
+    private function downloaderWithBundleUrl(string $bundleUrl, string $bundleResponseBody = ''): DownloadGitHubBundle
+    {
         $httpDownloader = $this->createMock(HttpDownloader::class);
         $httpDownloader->method('get')->willReturnCallback(
-            static function (string $url) use ($bundleResponseBody): Response {
+            static function (string $url) use ($bundleUrl, $bundleResponseBody): Response {
                 Assert::stringNotEmpty($url);
 
                 if (str_contains($url, '/attestations/')) {
                     return new Response(['url' => $url], 200, [], (string) json_encode([
-                        'attestations' => [['bundle_url' => self::BUNDLE_URL]],
+                        'attestations' => [['bundle_url' => $bundleUrl]],
                     ]));
                 }
 
@@ -63,6 +69,14 @@ final class DownloadGitHubBundleTest extends TestCase
         $downloader = $this->downloaderReturning("\x80\x80\x80\x60\x00");
 
         $this->expectException(BundleResponseTooLarge::class);
+        $downloader->getBundles(FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'));
+    }
+
+    public function testThrowsWhenTheBundleUrlIsNotHttps(): void
+    {
+        $downloader = $this->downloaderWithBundleUrl('file:///etc/hostname');
+
+        $this->expectException(UntrustedBundleUrl::class);
         $downloader->getBundles(FilenameWithChecksum::fromFilenameAndChecksum('irrelevant', 'irrelevant'));
     }
 }

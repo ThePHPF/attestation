@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\BundleSource\Exception\BundleResponseTooLarge;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToDecompressBundle;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\BundleSource\Exception\MissingAttestation;
+use ThePhpFoundation\Attestation\BundleSource\Exception\UntrustedBundleUrl;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use Webmozart\Assert\Assert;
 
@@ -23,6 +24,7 @@ use function json_decode;
 use function ord;
 use function snappy_uncompress;
 use function sprintf;
+use function str_starts_with;
 use function strlen;
 
 class DownloadGitHubBundle implements BundleSource
@@ -130,6 +132,10 @@ class DownloadGitHubBundle implements BundleSource
         Assert::keyExists($attestation, 'bundle_url');
         Assert::stringNotEmpty($attestation['bundle_url']);
         $bundleUrl = $attestation['bundle_url'];
+
+        if (! str_starts_with($bundleUrl, 'https://')) {
+            throw UntrustedBundleUrl::fromUrl($bundleUrl);
+        }
 
         try {
             $response = $this->httpDownloader->get(
