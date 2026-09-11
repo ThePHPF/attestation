@@ -7,6 +7,7 @@ namespace ThePhpFoundation\Attestation\Verification;
 use Webmozart\Assert\Assert;
 
 use function base64_decode;
+use function chr;
 use function ord;
 use function str_replace;
 use function strlen;
@@ -34,6 +35,39 @@ final class Der
         Assert::stringNotEmpty($der);
 
         return $der;
+    }
+
+    /** @return non-empty-string */
+    public static function bytesFromPublicKeyPem(string $pem): string
+    {
+        $der = base64_decode(str_replace(
+            ['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\r", "\n"],
+            '',
+            $pem,
+        ));
+        Assert::stringNotEmpty($der);
+
+        return $der;
+    }
+
+    public static function writeTlv(int $tag, string $value): string
+    {
+        return chr($tag & 0xFF) . self::writeLength(strlen($value)) . $value;
+    }
+
+    private static function writeLength(int $length): string
+    {
+        if ($length < 0x80) {
+            return chr($length & 0xFF);
+        }
+
+        $bytes = '';
+        while ($length > 0) {
+            $bytes    = chr($length & 0xFF) . $bytes;
+            $length >>= 8;
+        }
+
+        return chr(0x80 | strlen($bytes) & 0xFF) . $bytes;
     }
 
     /** @return array{0: int, 1: string, 2: int} */

@@ -6,6 +6,7 @@ namespace ThePhpFoundation\Attestation\Verification;
 
 use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\PemPublicKey;
+use ThePhpFoundation\Attestation\Verification\Exception\NoCertificateTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
 use Webmozart\Assert\Assert;
@@ -121,6 +122,84 @@ final class TrustedRoot
         }
 
         throw NoTransparencyLogKeyInTrustedRoot::fromLogId(bin2hex($logId));
+    }
+
+    /**
+     * @param non-empty-string $logId
+     *
+     * @return TransparencyLogKey
+     */
+    public function resolveCertificateTransparencyLogPublicKey(string $logId): array
+    {
+        foreach ($this->parseDocuments() as $decoded) {
+            if (
+                ! is_array($decoded)
+                || ! array_key_exists('ctlogs', $decoded)
+                || ! is_array($decoded['ctlogs'])
+            ) {
+                continue;
+            }
+
+            /** @var mixed $ctlog */
+            foreach ($decoded['ctlogs'] as $ctlog) {
+                if (
+                    ! is_array($ctlog)
+                    || ! array_key_exists('logId', $ctlog)
+                    || ! is_array($ctlog['logId'])
+                    || ! array_key_exists('keyId', $ctlog['logId'])
+                    || ! is_string($ctlog['logId']['keyId'])
+                    || $ctlog['logId']['keyId'] === ''
+                    || ! array_key_exists('publicKey', $ctlog)
+                    || ! is_array($ctlog['publicKey'])
+                    || ! array_key_exists('rawBytes', $ctlog['publicKey'])
+                    || ! is_string($ctlog['publicKey']['rawBytes'])
+                    || $ctlog['publicKey']['rawBytes'] === ''
+                    || ! array_key_exists('keyDetails', $ctlog['publicKey'])
+                    || ! is_string($ctlog['publicKey']['keyDetails'])
+                    || $ctlog['publicKey']['keyDetails'] === ''
+                ) {
+                    continue;
+                }
+
+                $ctlogKeyId = base64_decode($ctlog['logId']['keyId']);
+                if ($ctlogKeyId === '' || ! hash_equals($logId, $ctlogKeyId)) {
+                    continue;
+                }
+
+                if (! in_array($ctlog['publicKey']['keyDetails'], self::SUPPORTED_TRANSPARENCY_LOG_KEY_DETAILS, true)) {
+                    throw UnsupportedTransparencyLogKeyAlgorithm::fromKeyDetails($ctlog['publicKey']['keyDetails']);
+                }
+
+                Assert::keyExists($ctlog['publicKey'], 'validFor');
+                Assert::isArray($ctlog['publicKey']['validFor']);
+                Assert::keyExists($ctlog['publicKey']['validFor'], 'start');
+                Assert::stringNotEmpty($ctlog['publicKey']['validFor']['start']);
+                $validForStart = strtotime($ctlog['publicKey']['validFor']['start']);
+                Assert::notFalse($validForStart);
+
+                $validForEnd = null;
+                if (
+                    array_key_exists('end', $ctlog['publicKey']['validFor'])
+                    && $ctlog['publicKey']['validFor']['end'] !== null
+                ) {
+                    Assert::stringNotEmpty($ctlog['publicKey']['validFor']['end']);
+                    $validForEnd = strtotime($ctlog['publicKey']['validFor']['end']);
+                    Assert::notFalse($validForEnd);
+                }
+
+                return [
+                    'publicKey' => PemPublicKey::fromBase64EncodedDerBytes($ctlog['publicKey']['rawBytes']),
+                    'keyId' => $ctlogKeyId,
+                    'keyDetails' => $ctlog['publicKey']['keyDetails'],
+                    'validFor' => [
+                        'start' => $validForStart,
+                        'end' => $validForEnd,
+                    ],
+                ];
+            }
+        }
+
+        throw NoCertificateTransparencyLogKeyInTrustedRoot::fromLogId(bin2hex($logId));
     }
 
     /** @return list<array{certChainPem: non-empty-string, certChainDer: non-empty-list<non-empty-string>, validFor: array{start: int, end: int|null}}> */

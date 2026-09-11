@@ -59,4 +59,36 @@ final class DerTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         Der::readTlv("\x04\x05hi", 0);
     }
+
+    public function testBytesFromPublicKeyPemStripsTheHeaderFooterAndNewlinesAndDecodesTheBase64Content(): void
+    {
+        $der = Der::bytesFromPublicKeyPem(
+            "-----BEGIN PUBLIC KEY-----\n"
+            . base64_encode('not a real public key') . "\n"
+            . "-----END PUBLIC KEY-----\n",
+        );
+
+        self::assertSame('not a real public key', $der);
+    }
+
+    public function testWriteTlvRoundTripsAShortFormLengthValue(): void
+    {
+        $encoded = Der::writeTlv(0x04, 'hello');
+
+        self::assertSame("\x04\x05hello", $encoded);
+        [$tag, $value] = Der::readTlv($encoded, 0);
+        self::assertSame(0x04, $tag);
+        self::assertSame('hello', $value);
+    }
+
+    public function testWriteTlvRoundTripsALongFormLengthValue(): void
+    {
+        $value   = str_repeat('a', 200);
+        $encoded = Der::writeTlv(0x04, $value);
+
+        self::assertSame("\x04\x81\xC8" . $value, $encoded);
+        [$tag, $decodedValue] = Der::readTlv($encoded, 0);
+        self::assertSame(0x04, $tag);
+        self::assertSame($value, $decodedValue);
+    }
 }

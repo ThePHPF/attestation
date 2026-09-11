@@ -6,6 +6,7 @@ namespace ThePhpFoundation\UnitTest\Attestation\Verification;
 
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\PemCertificate;
+use ThePhpFoundation\Attestation\Verification\Exception\NoCertificateTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\NoTransparencyLogKeyInTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Exception\UnsupportedTransparencyLogKeyAlgorithm;
 use ThePhpFoundation\Attestation\Verification\TrustedRoot;
@@ -25,6 +26,9 @@ final class TrustedRootTest extends TestCase
 
     private const CT_KEY_TRUSTED_ROOT = __DIR__ . '/../../fixture/invalid-ct-key-fail-trusted-root.json';
     private const CT_LOG_ID           = 'G3wUKk6ZK6ffHh/FdCRUE2wVekyzHEEIpSG4savnv0w=';
+
+    private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
+    private const SCT_WITH_EXTENSIONS_CT_LOG_ID    = 'LKXNJ6iUhMOOdIaNLTveHnhSr+fidx5vice9Zn38+O8=';
 
     private const TSA_TRUSTED_ROOT = __DIR__ . '/../../fixture/rekor2-timestamp-untrusted-tsa-with-embedded-cert-fail-trusted-root.json';
 
@@ -59,6 +63,29 @@ final class TrustedRootTest extends TestCase
         $this->expectException(UnsupportedTransparencyLogKeyAlgorithm::class);
         (new TrustedRoot(self::UNSUPPORTED_ALGORITHM_TRUSTED_ROOT))->resolveTransparencyLogPublicKey(
             self::decodedLogId(self::UNSUPPORTED_ALGORITHM_KEY_ID),
+        );
+    }
+
+    public function testResolveCertificateTransparencyLogPublicKeyReturnsTheMatchingKey(): void
+    {
+        $key = (new TrustedRoot(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT))->resolveCertificateTransparencyLogPublicKey(
+            self::decodedLogId(self::SCT_WITH_EXTENSIONS_CT_LOG_ID),
+        );
+
+        self::assertSame(TrustedRoot::KEY_DETAILS_ECDSA_P256_SHA_256, $key['keyDetails']);
+    }
+
+    public function testResolveCertificateTransparencyLogPublicKeyThrowsWhenNoKeyMatches(): void
+    {
+        $this->expectException(NoCertificateTransparencyLogKeyInTrustedRoot::class);
+        (new TrustedRoot(self::SCT_WITH_EXTENSIONS_TRUSTED_ROOT))->resolveCertificateTransparencyLogPublicKey(random_bytes(32));
+    }
+
+    public function testResolveCertificateTransparencyLogPublicKeyThrowsForAnUnsupportedAlgorithm(): void
+    {
+        $this->expectException(UnsupportedTransparencyLogKeyAlgorithm::class);
+        (new TrustedRoot(self::CT_KEY_TRUSTED_ROOT))->resolveCertificateTransparencyLogPublicKey(
+            self::decodedLogId(self::CT_LOG_ID),
         );
     }
 
