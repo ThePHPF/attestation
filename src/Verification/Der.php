@@ -24,6 +24,8 @@ final class Der
     public const TAG_SEQUENCE           = 0x30;
     public const TAG_CONTEXT_EXTENSIONS = 0xA3;
 
+    private const MAX_LENGTH_BYTES = 4;
+
     /** @return non-empty-string */
     public static function bytesFromPem(string $pem): string
     {
@@ -73,6 +75,8 @@ final class Der
     /** @return array{0: int, 1: string, 2: int} */
     public static function readTlv(string $data, int $offset): array
     {
+        $startOffset = $offset;
+
         Assert::true($offset + 2 <= strlen($data));
 
         $tag = ord($data[$offset]);
@@ -85,6 +89,7 @@ final class Der
             $length = $lengthByte;
         } else {
             $numberOfLengthBytes = $lengthByte & 0x7F;
+            Assert::lessThanEq($numberOfLengthBytes, self::MAX_LENGTH_BYTES);
             Assert::true($offset + $numberOfLengthBytes <= strlen($data));
 
             $length = 0;
@@ -97,6 +102,9 @@ final class Der
         Assert::true($offset + $length <= strlen($data));
         $value = substr($data, $offset, $length);
 
-        return [$tag, $value, $offset + $length];
+        $nextOffset = $offset + $length;
+        Assert::greaterThan($nextOffset, $startOffset);
+
+        return [$tag, $value, $nextOffset];
     }
 }

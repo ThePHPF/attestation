@@ -60,6 +60,12 @@ final class DerTest extends TestCase
         Der::readTlv("\x04\x05hi", 0);
     }
 
+    public function testReadTlvRejectsALengthFieldLongEnoughToOverflow(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        Der::readTlv("\x30\x88" . str_repeat("\xFF", 8) . 'trailing bytes after', 0);
+    }
+
     public function testBytesFromPublicKeyPemStripsTheHeaderFooterAndNewlinesAndDecodesTheBase64Content(): void
     {
         $der = Der::bytesFromPublicKeyPem(
