@@ -24,4 +24,9 @@ final class SnappyTest extends TestCase
 
         self::assertSame($expectedJson, $actual);
     }
+
+    public function testReturnsFalseForMalformedInput(): void
+    {
+        self::assertFalse((new Snappy())->uncompress("\x05\xFF"));
+    }
 }
