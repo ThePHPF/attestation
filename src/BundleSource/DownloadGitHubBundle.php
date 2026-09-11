@@ -9,6 +9,8 @@ use Composer\Factory;
 use Composer\IO\NullIO;
 use Composer\Util\HttpDownloader;
 use ThePhpFoundation\Attestation\Bundle;
+use ThePhpFoundation\Attestation\BundleSource\Exception\BundleResponseTooLarge;
+use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToDecompressBundle;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToFetchBundleUrl;
 use ThePhpFoundation\Attestation\BundleSource\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
@@ -18,12 +20,16 @@ use function array_key_exists;
 use function array_map;
 use function is_array;
 use function json_decode;
+use function ord;
 use function snappy_uncompress;
 use function sprintf;
+use function strlen;
 
 class DownloadGitHubBundle implements BundleSource
 {
-    private const GITHUB_API_URL = 'https://api.github.com';
+    private const GITHUB_API_URL                        = 'https://api.github.com';
+    private const MAX_COMPRESSED_BUNDLE_SIZE            = 8 * 1024 * 1024;
+    private const MAX_DECLARED_UNCOMPRESSED_BUNDLE_SIZE = 8 * 1024 * 1024;
 
     /**
      * Pinning to specific GH API version so we can control BC surface
@@ -145,12 +151,50 @@ class DownloadGitHubBundle implements BundleSource
             throw FailedToFetchBundleUrl::fromUrl($bundleUrl, $response->getStatusCode());
         }
 
+        if (strlen($compressedBundle) > self::MAX_COMPRESSED_BUNDLE_SIZE) {
+            throw BundleResponseTooLarge::fromUrl($bundleUrl, strlen($compressedBundle), self::MAX_COMPRESSED_BUNDLE_SIZE);
+        }
+
+        $declaredUncompressedLength = self::declaredSnappyUncompressedLength($compressedBundle);
+        if ($declaredUncompressedLength !== null && $declaredUncompressedLength > self::MAX_DECLARED_UNCOMPRESSED_BUNDLE_SIZE) {
+            throw BundleResponseTooLarge::fromUrl($bundleUrl, $declaredUncompressedLength, self::MAX_DECLARED_UNCOMPRESSED_BUNDLE_SIZE);
+        }
+
         $decompressedBundle = snappy_uncompress($compressedBundle);
+        if ($decompressedBundle === false) {
+            throw FailedToDecompressBundle::fromUrl($bundleUrl);
+        }
 
         /** @var mixed $decodedBundle */
         $decodedBundle = json_decode($decompressedBundle, true);
         Assert::isArray($decodedBundle);
 
         return $decodedBundle;
+    }
+
+    private static function declaredSnappyUncompressedLength(string $compressed): int|null
+    {
+        $result = 0;
+        $shift  = 0;
+        $length = strlen($compressed);
+
+        for ($offset = 0; $shift < 32 && $offset < $length; $offset++) {
+            $byte = ord($compressed[$offset]);
+            $val  = $byte & 0x7F;
+
+            if ((($val << $shift) >> $shift) !== $val) {
+                return null;
+            }
+
+            $result |= $val << $shift;
+
+            if ($byte < 128) {
+                return $result;
+            }
+
+            $shift += 7;
+        }
+
+        return null;
     }
 }
