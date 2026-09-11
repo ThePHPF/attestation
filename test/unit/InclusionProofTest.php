@@ -6,8 +6,10 @@ namespace ThePhpFoundation\UnitTest\Attestation;
 
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\InclusionProof;
+use Webmozart\Assert\InvalidArgumentException;
 
 use function base64_decode;
+use function base64_encode;
 
 /** @covers \ThePhpFoundation\Attestation\InclusionProof */
 final class InclusionProofTest extends TestCase
@@ -48,5 +50,49 @@ final class InclusionProofTest extends TestCase
 
         self::assertNull($inclusionProof->checkpointEnvelope());
         self::assertSame([], $inclusionProof->hashes());
+    }
+
+    public function testRejectsALogIndexEqualToTreeSize(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        InclusionProof::fromBundleInclusionProof([
+            'logIndex' => '1',
+            'rootHash' => 'AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=',
+            'treeSize' => '1',
+            'hashes' => [],
+        ]);
+    }
+
+    public function testRejectsANegativeLogIndex(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        InclusionProof::fromBundleInclusionProof([
+            'logIndex' => '-1',
+            'rootHash' => 'AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=',
+            'treeSize' => '2',
+            'hashes' => [],
+        ]);
+    }
+
+    public function testRejectsATreeSizeOfZero(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        InclusionProof::fromBundleInclusionProof([
+            'logIndex' => '0',
+            'rootHash' => 'AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=',
+            'treeSize' => '0',
+            'hashes' => [],
+        ]);
+    }
+
+    public function testRejectsAProofHashThatIsNotThirtyTwoBytes(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        InclusionProof::fromBundleInclusionProof([
+            'logIndex' => '0',
+            'rootHash' => 'AhbZoVyv2FfnyQjQoGoj8crpY4R1tWuJiLVIUJxmGB4=',
+            'treeSize' => '2',
+            'hashes' => [base64_encode('too short')],
+        ]);
     }
 }

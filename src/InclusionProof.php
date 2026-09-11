@@ -8,10 +8,14 @@ use Webmozart\Assert\Assert;
 
 use function array_key_exists;
 use function base64_decode;
+use function strlen;
 
 /** @internal This is not a public API, so should not be depended upon unless you accept the risk of BC breaks */
 final class InclusionProof
 {
+    /** A Merkle leaf/node hash in this tree is always a SHA-256 digest. */
+    private const HASH_LENGTH = 32;
+
     /** @param list<string> $hashes */
     private function __construct(private int $logIndex, private string $rootHash, private int $treeSize, private array $hashes, private string|null $checkpointEnvelope)
     {
@@ -23,6 +27,7 @@ final class InclusionProof
         Assert::keyExists($inclusionProof, 'logIndex');
         Assert::stringNotEmpty($inclusionProof['logIndex']);
         Assert::numeric($inclusionProof['logIndex']);
+        $logIndex = (int) $inclusionProof['logIndex'];
 
         Assert::keyExists($inclusionProof, 'rootHash');
         Assert::stringNotEmpty($inclusionProof['rootHash']);
@@ -32,6 +37,12 @@ final class InclusionProof
         Assert::keyExists($inclusionProof, 'treeSize');
         Assert::stringNotEmpty($inclusionProof['treeSize']);
         Assert::numeric($inclusionProof['treeSize']);
+        $treeSize = (int) $inclusionProof['treeSize'];
+
+        // A Merkle audit path is only defined for a leaf that is actually in the tree.
+        Assert::greaterThanEq($treeSize, 1);
+        Assert::greaterThanEq($logIndex, 0);
+        Assert::lessThan($logIndex, $treeSize);
 
         Assert::keyExists($inclusionProof, 'hashes');
         Assert::isArray($inclusionProof['hashes']);
@@ -39,7 +50,7 @@ final class InclusionProof
         foreach ($inclusionProof['hashes'] as $hash) {
             Assert::stringNotEmpty($hash);
             $decodedHash = base64_decode($hash);
-            Assert::stringNotEmpty($decodedHash);
+            Assert::same(strlen($decodedHash), self::HASH_LENGTH);
             $hashes[] = $decodedHash;
         }
 
@@ -52,13 +63,7 @@ final class InclusionProof
             }
         }
 
-        return new self(
-            (int) $inclusionProof['logIndex'],
-            $rootHash,
-            (int) $inclusionProof['treeSize'],
-            $hashes,
-            $checkpointEnvelope,
-        );
+        return new self($logIndex, $rootHash, $treeSize, $hashes, $checkpointEnvelope);
     }
 
     public function logIndex(): int
