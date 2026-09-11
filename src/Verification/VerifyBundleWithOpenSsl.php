@@ -16,6 +16,7 @@ use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrust
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
+use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveAnInclusionAnchor;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidCheckpoints;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidInclusionProof;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidLogIndex;
@@ -72,6 +73,7 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new TransparencyLogEntriesHaveValidInclusionProof(),
             new TransparencyLogEntriesHaveValidCheckpoints($trustedRoot),
             new TransparencyLogEntriesHaveValidSignedEntryTimestamps($trustedRoot),
+            new TransparencyLogEntriesHaveAnInclusionAnchor(),
             new TransparencyLogEntriesMatchBundleContent(),
             new CertificateSignedByTrustedRoot($trustedRoot),
             new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot),
