@@ -11,7 +11,7 @@ use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 interface VerifyBundle
 {
     /**
-     * @param non-empty-list<Bundle> $bundles
+     * @param list<Bundle> $bundles
      *
      * @throws FailedToVerifyArtifact
      */

@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\Verification\Exception\NoBundlesToVerify;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -66,6 +67,14 @@ class VerifyBundleWithOpenSslTest extends TestCase
             $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
         );
+    }
+
+    public function testRejectsAnEmptyListOfBundles(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::factory([], self::CERTIFICATE_IDENTITY, 'https://token.actions.githubusercontent.com');
+
+        $this->expectException(NoBundlesToVerify::class);
+        $verifier->verify([], FilenameWithChecksum::fromFilename(self::PIE_PHAR));
     }
 
     public function testSuccessfulVerificationOfAMessageSignatureBundle(): void

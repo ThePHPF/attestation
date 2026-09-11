@@ -23,6 +23,7 @@ use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHa
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveValidSignedEntryTimestamps;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesMatchBundleContent;
 use ThePhpFoundation\Attestation\Verification\Assertion\VerifyBundleCheck;
+use ThePhpFoundation\Attestation\Verification\Exception\NoBundlesToVerify;
 
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
@@ -87,6 +88,10 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     /** @inheritDoc */
     public function verify(array $bundles, FilenameWithChecksum $file): void
     {
+        if ($bundles === []) {
+            throw NoBundlesToVerify::new();
+        }
+
         foreach ($bundles as $bundleIndex => $bundle) {
             foreach ($this->checks as $check) {
                 $check->assert($file, $bundleIndex, $bundle);
