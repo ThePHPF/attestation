@@ -9,6 +9,7 @@ use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesMatchBundleContent;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\MalformedTransparencyLogEntryContent;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 
 use function base64_encode;
@@ -425,6 +426,32 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         ]);
 
         $this->expectException(TransparencyLogEntryContentMismatch::class);
+        self::assertOnBundle($bundle, 'irrelevant');
+    }
+
+    public function testRejectsMalformedContentAsAnAttestationExceptionRatherThanARawAssertException(): void
+    {
+        $bundle = Bundle::fromBundle([
+            'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
+            'verificationMaterial' => [
+                'certificate' => ['rawBytes' => base64_encode(self::CERTIFICATE_DER_BYTES)],
+                'tlogEntries' => [
+                    [
+                        'logIndex' => '1',
+                        'kindVersion' => ['kind' => 'dsse', 'version' => '0.0.1'],
+                        'logId' => ['keyId' => base64_encode('not a real log id')],
+                        'canonicalizedBody' => base64_encode((string) json_encode(['spec' => ['payloadHash' => 'not an array']])),
+                    ],
+                ],
+            ],
+            'dsseEnvelope' => [
+                'payload' => base64_encode('a dsse payload'),
+                'payloadType' => 'application/vnd.in-toto+json',
+                'signatures' => [['sig' => base64_encode(self::SIGNATURE_BYTES)]],
+            ],
+        ]);
+
+        $this->expectException(MalformedTransparencyLogEntryContent::class);
         self::assertOnBundle($bundle, 'irrelevant');
     }
 }

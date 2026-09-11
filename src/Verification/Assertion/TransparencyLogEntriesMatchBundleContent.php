@@ -12,8 +12,10 @@ use ThePhpFoundation\Attestation\PemCertificate;
 use ThePhpFoundation\Attestation\TransparencyLogEntry;
 use ThePhpFoundation\Attestation\Verification\Der;
 use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\MalformedTransparencyLogEntryContent;
 use ThePhpFoundation\Attestation\Verification\Exception\TransparencyLogEntryContentMismatch;
 use Webmozart\Assert\Assert;
+use Webmozart\Assert\InvalidArgumentException;
 
 use function base64_decode;
 use function bin2hex;
@@ -29,41 +31,45 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
     public function assert(FilenameWithChecksum $file, int $bundleIndex, Bundle $bundle): void
     {
         foreach ($bundle->transparencyLogEntries() as $transparencyLogEntry) {
-            if ($transparencyLogEntry->kind() === 'hashedrekord' && $bundle->content() instanceof MessageSignature) {
-                $this->assertHashedRekordEntryMatchesBundleContent(
-                    $bundleIndex,
-                    $transparencyLogEntry,
-                    $file,
-                    $bundle->content(),
-                    $bundle->certificate(),
-                );
-            } elseif (
-                $transparencyLogEntry->kind() === 'hashedrekord'
-                && $transparencyLogEntry->version() === self::HASHEDREKORD_VERSION_0_0_2
-                && $bundle->content() instanceof DsseEnvelope
-            ) {
-                $this->assertHashedRekordV002EntryMatchesDsseEnvelope(
-                    $bundleIndex,
-                    $transparencyLogEntry,
-                    $bundle->content(),
-                    $bundle->certificate(),
-                );
-            } elseif ($transparencyLogEntry->kind() === 'dsse' && $bundle->content() instanceof DsseEnvelope) {
-                $this->assertDsseEntryMatchesBundleContent(
-                    $bundleIndex,
-                    $transparencyLogEntry,
-                    $bundle->content(),
-                    $bundle->certificate(),
-                );
-            } elseif ($transparencyLogEntry->kind() === 'intoto' && $bundle->content() instanceof DsseEnvelope) {
-                $this->assertIntotoEntryMatchesBundleContent(
-                    $bundleIndex,
-                    $transparencyLogEntry,
-                    $bundle->content(),
-                    $bundle->certificate(),
-                );
-            } else {
-                throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'kind');
+            try {
+                if ($transparencyLogEntry->kind() === 'hashedrekord' && $bundle->content() instanceof MessageSignature) {
+                    $this->assertHashedRekordEntryMatchesBundleContent(
+                        $bundleIndex,
+                        $transparencyLogEntry,
+                        $file,
+                        $bundle->content(),
+                        $bundle->certificate(),
+                    );
+                } elseif (
+                    $transparencyLogEntry->kind() === 'hashedrekord'
+                    && $transparencyLogEntry->version() === self::HASHEDREKORD_VERSION_0_0_2
+                    && $bundle->content() instanceof DsseEnvelope
+                ) {
+                    $this->assertHashedRekordV002EntryMatchesDsseEnvelope(
+                        $bundleIndex,
+                        $transparencyLogEntry,
+                        $bundle->content(),
+                        $bundle->certificate(),
+                    );
+                } elseif ($transparencyLogEntry->kind() === 'dsse' && $bundle->content() instanceof DsseEnvelope) {
+                    $this->assertDsseEntryMatchesBundleContent(
+                        $bundleIndex,
+                        $transparencyLogEntry,
+                        $bundle->content(),
+                        $bundle->certificate(),
+                    );
+                } elseif ($transparencyLogEntry->kind() === 'intoto' && $bundle->content() instanceof DsseEnvelope) {
+                    $this->assertIntotoEntryMatchesBundleContent(
+                        $bundleIndex,
+                        $transparencyLogEntry,
+                        $bundle->content(),
+                        $bundle->certificate(),
+                    );
+                } else {
+                    throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'kind');
+                }
+            } catch (InvalidArgumentException $malformedContent) {
+                throw MalformedTransparencyLogEntryContent::forIndex($bundleIndex, $malformedContent->getMessage());
             }
         }
     }
