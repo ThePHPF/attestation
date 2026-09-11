@@ -24,6 +24,8 @@ use function strlen;
 use function strpos;
 use function substr_replace;
 
+use const PHP_VERSION_ID;
+
 /** @covers \ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSignedCertificateTimestamp */
 final class CertificateHasATrustedSignedCertificateTimestampTest extends TestCase
 {
@@ -103,7 +105,11 @@ final class CertificateHasATrustedSignedCertificateTimestampTest extends TestCas
         $check       = new CertificateHasATrustedSignedCertificateTimestamp($trustedRoot);
 
         $extractSignedCertificateTimestamps = new ReflectionMethod($check, 'extractSignedCertificateTimestamps');
-        $signedCertificateTimestamps        = $extractSignedCertificateTimestamps->invoke($check, $certificateDer);
+        if (PHP_VERSION_ID < 80100) {
+            $extractSignedCertificateTimestamps->setAccessible(true);
+        }
+
+        $signedCertificateTimestamps = $extractSignedCertificateTimestamps->invoke($check, $certificateDer);
         Assert::isArray($signedCertificateTimestamps);
         Assert::isArray($signedCertificateTimestamps[0]);
         Assert::stringNotEmpty($signedCertificateTimestamps[0]['signature']);
