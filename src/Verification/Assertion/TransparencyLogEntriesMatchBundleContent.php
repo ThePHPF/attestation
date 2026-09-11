@@ -62,6 +62,8 @@ final class TransparencyLogEntriesMatchBundleContent implements VerifyBundleChec
                     $bundle->content(),
                     $bundle->certificate(),
                 );
+            } else {
+                throw TransparencyLogEntryContentMismatch::forIndex($bundleIndex, 'kind');
             }
         }
     }

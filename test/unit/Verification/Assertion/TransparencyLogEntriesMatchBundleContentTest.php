@@ -402,4 +402,29 @@ final class TransparencyLogEntriesMatchBundleContentTest extends TestCase
         $this->expectException(TransparencyLogEntryContentMismatch::class);
         self::assertOnBundle($bundle, 'irrelevant');
     }
+
+    public function testRejectsAnEntryWhoseKindDoesNotMatchTheBundleContentType(): void
+    {
+        $bundle = Bundle::fromBundle([
+            'mediaType' => 'application/vnd.dev.sigstore.bundle+json;version=0.3',
+            'verificationMaterial' => [
+                'certificate' => ['rawBytes' => base64_encode(self::CERTIFICATE_DER_BYTES)],
+                'tlogEntries' => [
+                    [
+                        'logIndex' => '1',
+                        'kindVersion' => ['kind' => 'dsse', 'version' => '0.0.1'],
+                        'logId' => ['keyId' => base64_encode('not a real log id')],
+                        'canonicalizedBody' => base64_encode('irrelevant, never parsed'),
+                    ],
+                ],
+            ],
+            'messageSignature' => [
+                'messageDigest' => ['algorithm' => 'SHA2_256', 'digest' => base64_encode('not a real digest')],
+                'signature' => base64_encode(self::SIGNATURE_BYTES),
+            ],
+        ]);
+
+        $this->expectException(TransparencyLogEntryContentMismatch::class);
+        self::assertOnBundle($bundle, 'irrelevant');
+    }
 }
