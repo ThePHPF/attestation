@@ -8,7 +8,7 @@ use function sprintf;
 
 class FailedToFetchBundleUrl extends BundleSourceException
 {
-    public static function fromUrl(string $bundleUrl, ?int $statusCode = null): self
+    public static function fromUrl(string $bundleUrl, int|null $statusCode = null): self
     {
         return new self(sprintf(
             'Failed to fetch attestation bundle from "%s" (HTTP status: %s)',

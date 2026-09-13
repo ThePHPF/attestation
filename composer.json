@@ -3,7 +3,7 @@
     "description": "A PHP library to aid in verifying artifact attestations",
     "type": "library",
     "require": {
-        "php": "^7.4||^8.0",
+        "php": "^8.0",
         "ext-json": "*",
         "composer/composer": "^2.2",
         "symfony/console": "^5.4 || ^6.0 || ^7.0 || ^8.0",
@@ -16,8 +16,11 @@
         "phpunit/phpunit": "^9.6.25"
     },
     "suggest": {
+        "ext-bcmath": "Needed to verify message-signature bundles when only a digest, not the real artifact, is available (used if ext-gmp is not present)",
+        "ext-gmp": "Preferred over ext-bcmath for verifying message-signature bundles from a digest alone; consistently fast regardless of PHP version",
         "ext-openssl": "Needed to verify certificates using OpenSSL",
-        "ext-snappy": "Decompress bundle attestations faster; if not, flow-php/snappy PHP fallback is used"
+        "ext-snappy": "Decompress bundle attestations faster; if not, flow-php/snappy PHP fallback is used",
+        "ext-sodium": "Needed to verify Ed25519 transparency log signatures"
     },
     "license": "BSD-3-Clause",
     "autoload": {

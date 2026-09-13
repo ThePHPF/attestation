@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace ThePhpFoundation\Attestation;
 
+use Webmozart\Assert\Assert;
+
+use function base64_decode;
 use function wordwrap;
 
 /**
@@ -13,13 +16,9 @@ use function wordwrap;
  */
 final class PemCertificate
 {
-    /** @var non-empty-string */
-    private string $base64EncodedDerBytes;
-
     /** @param non-empty-string $base64EncodedDerBytes */
-    private function __construct(string $base64EncodedDerBytes)
+    private function __construct(private string $base64EncodedDerBytes)
     {
-        $this->base64EncodedDerBytes = $base64EncodedDerBytes;
     }
 
     /** @param non-empty-string $base64EncodedDerBytes */
@@ -38,5 +37,14 @@ final class PemCertificate
         return "-----BEGIN CERTIFICATE-----\n"
             . wordwrap($this->base64EncodedDerBytes, 67, "\n", true) . "\n"
             . "-----END CERTIFICATE-----\n";
+    }
+
+    /** @return non-empty-string raw (non-base64, non-PEM) DER-encoded certificate bytes */
+    public function derEncodedBytes(): string
+    {
+        $decoded = base64_decode($this->base64EncodedDerBytes);
+        Assert::stringNotEmpty($decoded);
+
+        return $decoded;
     }
 }

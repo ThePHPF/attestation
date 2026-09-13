@@ -12,19 +12,12 @@ final class FilenameWithChecksum
 {
     private const HASH_TYPE_SHA256 = 'sha256';
 
-    /** @var non-empty-string */
-    private string $filename;
-    /** @var non-empty-string */
-    private string $checksum;
-
     /**
      * @param non-empty-string $filename
      * @param non-empty-string $checksum
      */
-    private function __construct(string $filename, string $checksum)
+    private function __construct(private string $filename, private string $checksum)
     {
-        $this->filename = $filename;
-        $this->checksum = $checksum;
     }
 
     /** @param non-empty-string $filename */

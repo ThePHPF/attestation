@@ -37,7 +37,7 @@ final class Snappy
 {
     public function __construct() {}
 
-    public function uncompress(string $compressedText): string
+    public function uncompress(string $compressedText): string|false
     {
         if ($compressedText === '') {
             return $compressedText;
@@ -46,7 +46,9 @@ final class Snappy
         $byteArray = array_values(unpack('C*', $compressedText) ?: []);
 
         $outputBuffer = [];
-        (new SnappyDecompressor($byteArray))->uncompressToBuffer($outputBuffer);
+        if (! (new SnappyDecompressor($byteArray))->uncompressToBuffer($outputBuffer)) {
+            return false;
+        }
 
         return pack('C*', ...$outputBuffer);
     }
