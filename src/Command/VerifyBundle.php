@@ -70,8 +70,8 @@ class VerifyBundle extends Command
             $bundles = (new OnDiskBundle($bundle))->getBundles($file);
 
             $verifier = $trustedRoot !== null
-                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer)
-                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer);
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer, null)
+                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer, null);
 
             $verifier->verify($bundles, $file);
         } catch (AttestationException $failure) {

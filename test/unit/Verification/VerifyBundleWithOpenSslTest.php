@@ -9,6 +9,7 @@ use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\Exception\NoBundlesToVerify;
+use ThePhpFoundation\Attestation\Verification\Exception\PredicateTypeMismatch;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -47,7 +48,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
 
     private static function verifierForMessageSignatureFixtures(): VerifyBundleWithOpenSsl
     {
-        return VerifyBundleWithOpenSsl::factory([], self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY, self::MESSAGE_SIGNATURE_CERTIFICATE_OIDC_ISSUER);
+        return VerifyBundleWithOpenSsl::factory([], self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY, self::MESSAGE_SIGNATURE_CERTIFICATE_OIDC_ISSUER, null);
     }
 
     public function testSuccessfulVerification(): void
@@ -60,6 +61,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
             ],
             self::CERTIFICATE_IDENTITY,
             'https://token.actions.githubusercontent.com',
+            'https://slsa.dev/provenance/v1',
         );
 
         $this->expectNotToPerformAssertions();
@@ -69,9 +71,25 @@ class VerifyBundleWithOpenSslTest extends TestCase
         );
     }
 
+    public function testRejectsABundleWithAnUnexpectedPredicateTypeWhenOneIsSpecified(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::factory(
+            [],
+            self::CERTIFICATE_IDENTITY,
+            'https://token.actions.githubusercontent.com',
+            'https://in-toto.io/attestation/release/v0.1',
+        );
+
+        $this->expectException(PredicateTypeMismatch::class);
+        $verifier->verify(
+            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
+        );
+    }
+
     public function testRejectsAnEmptyListOfBundles(): void
     {
-        $verifier = VerifyBundleWithOpenSsl::factory([], self::CERTIFICATE_IDENTITY, 'https://token.actions.githubusercontent.com');
+        $verifier = VerifyBundleWithOpenSsl::factory([], self::CERTIFICATE_IDENTITY, 'https://token.actions.githubusercontent.com', null);
 
         $this->expectException(NoBundlesToVerify::class);
         $verifier->verify([], FilenameWithChecksum::fromFilename(self::PIE_PHAR));
@@ -93,6 +111,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
             self::MESSAGE_SIGNATURE_CERTIFICATE_OIDC_ISSUER,
+            null,
         );
 
         $this->expectNotToPerformAssertions();
@@ -109,6 +128,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
             self::MESSAGE_SIGNATURE_CERTIFICATE_OIDC_ISSUER,
+            null,
         );
 
         $this->expectNotToPerformAssertions();
@@ -125,6 +145,7 @@ class VerifyBundleWithOpenSslTest extends TestCase
             [],
             self::MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY,
             self::MESSAGE_SIGNATURE_CERTIFICATE_OIDC_ISSUER,
+            null,
         );
 
         $this->expectNotToPerformAssertions();
