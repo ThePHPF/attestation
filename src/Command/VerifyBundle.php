@@ -42,6 +42,7 @@ class VerifyBundle extends Command
         $this->addOption('bundle', null, InputOption::VALUE_REQUIRED, 'Path to the Sigstore bundle file');
         $this->addOption('certificate-identity', null, InputOption::VALUE_REQUIRED, 'The expected signing certificate identity');
         $this->addOption('certificate-oidc-issuer', null, InputOption::VALUE_REQUIRED, 'The expected OIDC issuer of the signing certificate');
+        $this->addOption('predicate-type', null, InputOption::VALUE_REQUIRED, 'The expected predicate type of the attestation, e.g. https://slsa.dev/provenance/v1');
         $this->addOption('trusted-root', null, InputOption::VALUE_REQUIRED, 'Path to a custom trusted root file');
         $this->addOption('staging', null, InputOption::VALUE_NONE, 'Verify against the Sigstore staging environment (not currently supported)');
     }
@@ -52,6 +53,7 @@ class VerifyBundle extends Command
         $bundle                = $this->readBundleOption($input);
         $certificateIdentity   = $this->readCertificateIdentityOption($input);
         $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
+        $predicateType         = $this->readPredicateTypeOption($input);
         $trustedRoot           = $this->readTrustedRootOption($input);
 
         if (str_starts_with($artifact, self::SHA256_PREFIX)) {
@@ -70,8 +72,8 @@ class VerifyBundle extends Command
             $bundles = (new OnDiskBundle($bundle))->getBundles($file);
 
             $verifier = $trustedRoot !== null
-                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer, null)
-                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer, null);
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer, $predicateType)
+                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer, $predicateType);
 
             $verifier->verify($bundles, $file);
         } catch (AttestationException $failure) {
@@ -131,6 +133,19 @@ class VerifyBundle extends Command
         }
 
         return $certificateOidcIssuer;
+    }
+
+    /** @return non-empty-string|null */
+    private function readPredicateTypeOption(InputInterface $input): string|null
+    {
+        $predicateType = $input->getOption('predicate-type');
+        Assert::nullOrString($predicateType);
+
+        if ($predicateType === '') {
+            throw new RuntimeException('Specify --predicate-type=https://...');
+        }
+
+        return $predicateType;
     }
 
     /** @return non-empty-string|null */
