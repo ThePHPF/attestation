@@ -13,6 +13,7 @@ use ThePhpFoundation\Attestation\Verification\Assertion\CertificateHasATrustedSi
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateIdentity;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateOidcIssuer;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
+use ThePhpFoundation\Attestation\Verification\Assertion\PredicateType;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
@@ -38,10 +39,11 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
      * @param non-empty-string                $expectedOidcIssuer
+     * @param non-empty-string|null           $expectedPredicateType
      */
-    public static function factory(array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
+    public static function factory(array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer, string|null $expectedPredicateType): self
     {
-        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity, $expectedOidcIssuer);
+        return self::withTrustedRootFile(self::TRUSTED_ROOT_FILE_PATH, $extensions, $expectedCertificateIdentity, $expectedOidcIssuer, $expectedPredicateType);
     }
 
     /**
@@ -49,22 +51,24 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
      * @param non-empty-string                $expectedOidcIssuer
+     * @param non-empty-string|null           $expectedPredicateType
      */
-    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): self
+    public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer, string|null $expectedPredicateType): self
     {
-        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity, $expectedOidcIssuer));
+        return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity, $expectedOidcIssuer, $expectedPredicateType));
     }
 
     /**
      * @param array<non-empty-string, string> $extensions
      * @param non-empty-string                $expectedCertificateIdentity
      * @param non-empty-string                $expectedOidcIssuer
+     * @param non-empty-string|null           $expectedPredicateType
      *
      * @return list<VerifyBundleCheck>
      */
-    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer): array
+    private static function defaultChecks(TrustedRoot $trustedRoot, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer, string|null $expectedPredicateType): array
     {
-        return [
+        $checks = [
             new BundleMediaTypeIsSupported(),
             new BundleHasAtLeastOneTimestamp(),
             new TransparencyLogEntriesHaveValidLogIndex(),
@@ -83,6 +87,12 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
             new CertificateIdentity($expectedCertificateIdentity),
             new ArtifactMatchesBundleContent(),
         ];
+
+        if ($expectedPredicateType !== null) {
+            $checks[] = new PredicateType($expectedPredicateType);
+        }
+
+        return $checks;
     }
 
     /** @inheritDoc */

@@ -116,6 +116,22 @@ final class VerifyBundleTest extends TestCase
         self::assertStringContainsString('identity mismatch', $tester->getDisplay());
     }
 
+    public function testFailsWhenPredicateTypeDoesNotMatch(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::BUNDLE_FIXTURE,
+            '--certificate-identity' => self::CERTIFICATE_IDENTITY,
+            '--certificate-oidc-issuer' => self::OIDC_ISSUER,
+            '--predicate-type' => 'https://in-toto.io/attestation/release/v0.1',
+            'artifact' => self::PIE_PHAR,
+        ]);
+
+        self::assertSame(Command::FAILURE, $statusCode);
+        self::assertStringContainsString('predicate type mismatch', $tester->getDisplay());
+    }
+
     public function testFailsWhenBundleFileDoesNotExist(): void
     {
         $tester = $this->commandTester();
