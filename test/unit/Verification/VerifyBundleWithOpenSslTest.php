@@ -8,8 +8,13 @@ use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
+use ThePhpFoundation\Attestation\GitHubReleaseTag;
+use ThePhpFoundation\Attestation\Verification\Exception\DigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\FailedToVerifyArtifact;
 use ThePhpFoundation\Attestation\Verification\Exception\NoBundlesToVerify;
 use ThePhpFoundation\Attestation\Verification\Exception\PredicateTypeMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\ReleaseTagDigestMismatch;
+use ThePhpFoundation\Attestation\Verification\Exception\ReleaseTagMismatch;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -33,6 +38,10 @@ class VerifyBundleWithOpenSslTest extends TestCase
     private const TSA_VALIDITY_TRUSTED_ROOT_FIXTURE         = __DIR__ . '/../../fixture/trust-root-tsa-validity-end-inclusive-trusted-root.json';
     private const SCT_WITH_EXTENSIONS_BUNDLE_FIXTURE        = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions.json';
     private const SCT_WITH_EXTENSIONS_TRUSTED_ROOT_FIXTURE  = __DIR__ . '/../../fixture/bundle-with-sct-with-extensions-trusted-root.json';
+    private const RELEASE_BUNDLE_FIXTURE                    = __DIR__ . '/../../fixture/pie-1.5.5-release-bundle.json';
+    private const RELEASE_TAG_NAME                          = '1.5.5';
+    private const RELEASE_TAG_SHA                           = 'a41ca99acf93460f75a2acd830b2b8f013571e3a';
+    private const RELEASE_PIE_PHAR_DIGEST                   = '2ca0dff6868f1b53c095625674deef38ac698588e0a25e4321cd834a5b7553bc';
 
     /** @return non-empty-list<Bundle> */
     private function loadFixtureBundle(string $path): array
@@ -164,6 +173,61 @@ class VerifyBundleWithOpenSslTest extends TestCase
                 'sha256:' . self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
                 self::MESSAGE_SIGNATURE_ARTIFACT_DIGEST,
             ),
+        );
+    }
+
+    public function testSuccessfulVerificationOfAGitHubReleaseBundle(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::forGitHubRelease(GitHubReleaseTag::from(self::RELEASE_TAG_NAME, self::RELEASE_TAG_SHA));
+
+        $this->expectNotToPerformAssertions();
+        $verifier->verify(
+            $this->loadFixtureBundle(self::RELEASE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilenameAndChecksum('pie.phar', self::RELEASE_PIE_PHAR_DIGEST),
+        );
+    }
+
+    public function testRejectsAGitHubReleaseBundleForADifferentTagName(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::forGitHubRelease(GitHubReleaseTag::from('1.5.4', self::RELEASE_TAG_SHA));
+
+        $this->expectException(ReleaseTagMismatch::class);
+        $verifier->verify(
+            $this->loadFixtureBundle(self::RELEASE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilenameAndChecksum('pie.phar', self::RELEASE_PIE_PHAR_DIGEST),
+        );
+    }
+
+    public function testRejectsAGitHubReleaseBundleForADifferentTagSha(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::forGitHubRelease(GitHubReleaseTag::from(self::RELEASE_TAG_NAME, '7ebc116a58d99e8cb0a24da841c7caa2b7d1e09f'));
+
+        $this->expectException(ReleaseTagDigestMismatch::class);
+        $verifier->verify(
+            $this->loadFixtureBundle(self::RELEASE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilenameAndChecksum('pie.phar', self::RELEASE_PIE_PHAR_DIGEST),
+        );
+    }
+
+    public function testRejectsAGitHubReleaseBundleForAFileThatIsNotOneOfItsSubjects(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::forGitHubRelease(GitHubReleaseTag::from(self::RELEASE_TAG_NAME, self::RELEASE_TAG_SHA));
+
+        $this->expectException(DigestMismatch::class);
+        $verifier->verify(
+            $this->loadFixtureBundle(self::RELEASE_BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
+        );
+    }
+
+    public function testRejectsAProvenanceBundleWhenVerifyingAGitHubRelease(): void
+    {
+        $verifier = VerifyBundleWithOpenSsl::forGitHubRelease(GitHubReleaseTag::from(self::RELEASE_TAG_NAME, self::RELEASE_TAG_SHA));
+
+        $this->expectException(FailedToVerifyArtifact::class);
+        $verifier->verify(
+            $this->loadFixtureBundle(self::BUNDLE_FIXTURE),
+            FilenameWithChecksum::fromFilename(self::PIE_PHAR),
         );
     }
 }
