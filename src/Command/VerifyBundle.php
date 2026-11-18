@@ -13,6 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use ThePhpFoundation\Attestation\AttestationException;
 use ThePhpFoundation\Attestation\BundleSource\OnDiskBundle;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\GitHubReleaseTag;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 use Webmozart\Assert\Assert;
 
@@ -43,18 +44,34 @@ class VerifyBundle extends Command
         $this->addOption('certificate-identity', null, InputOption::VALUE_REQUIRED, 'The expected signing certificate identity');
         $this->addOption('certificate-oidc-issuer', null, InputOption::VALUE_REQUIRED, 'The expected OIDC issuer of the signing certificate');
         $this->addOption('predicate-type', null, InputOption::VALUE_REQUIRED, 'The expected predicate type of the attestation, e.g. https://slsa.dev/provenance/v1');
+        $this->addOption('github-release-tag', null, InputOption::VALUE_REQUIRED, 'Verify a GitHub release attestation for this tag name (requires --github-release-tag-sha)');
+        $this->addOption('github-release-tag-sha', null, InputOption::VALUE_REQUIRED, 'The git object SHA the GitHub release tag points to');
         $this->addOption('trusted-root', null, InputOption::VALUE_REQUIRED, 'Path to a custom trusted root file');
         $this->addOption('staging', null, InputOption::VALUE_NONE, 'Verify against the Sigstore staging environment (not currently supported)');
     }
 
     public function execute(InputInterface $input, OutputInterface $output): int
     {
-        $artifact              = $this->readArtifactArgument($input);
-        $bundle                = $this->readBundleOption($input);
-        $certificateIdentity   = $this->readCertificateIdentityOption($input);
-        $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
-        $predicateType         = $this->readPredicateTypeOption($input);
-        $trustedRoot           = $this->readTrustedRootOption($input);
+        $artifact         = $this->readArtifactArgument($input);
+        $bundle           = $this->readBundleOption($input);
+        $gitHubReleaseTag = $this->readGitHubReleaseTagOptions($input);
+        $trustedRoot      = $this->readTrustedRootOption($input);
+
+        if ($gitHubReleaseTag !== null && $trustedRoot !== null) {
+            throw new RuntimeException('--trusted-root cannot be used with --github-release-tag');
+        }
+
+        if ($gitHubReleaseTag !== null) {
+            $verifier = VerifyBundleWithOpenSsl::forGitHubRelease($gitHubReleaseTag);
+        } else {
+            $certificateIdentity   = $this->readCertificateIdentityOption($input);
+            $certificateOidcIssuer = $this->readCertificateOidcIssuerOption($input);
+            $predicateType         = $this->readPredicateTypeOption($input);
+
+            $verifier = $trustedRoot !== null
+                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer, $predicateType)
+                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer, $predicateType);
+        }
 
         if (str_starts_with($artifact, self::SHA256_PREFIX)) {
             $checksum = substr($artifact, strlen(self::SHA256_PREFIX));
@@ -69,13 +86,7 @@ class VerifyBundle extends Command
         $output->writeln(sprintf('Verifying bundle <info>%s</info> for <info>%s</info>...', $bundle, $artifact));
 
         try {
-            $bundles = (new OnDiskBundle($bundle))->getBundles($file);
-
-            $verifier = $trustedRoot !== null
-                ? VerifyBundleWithOpenSsl::withTrustedRootFile($trustedRoot, [], $certificateIdentity, $certificateOidcIssuer, $predicateType)
-                : VerifyBundleWithOpenSsl::factory([], $certificateIdentity, $certificateOidcIssuer, $predicateType);
-
-            $verifier->verify($bundles, $file);
+            $verifier->verify((new OnDiskBundle($bundle))->getBundles($file), $file);
         } catch (AttestationException $failure) {
             $output->writeln(sprintf('❌ %s', $failure->getMessage()));
 
@@ -146,6 +157,24 @@ class VerifyBundle extends Command
         }
 
         return $predicateType;
+    }
+
+    private function readGitHubReleaseTagOptions(InputInterface $input): GitHubReleaseTag|null
+    {
+        $tagName = $input->getOption('github-release-tag');
+        Assert::nullOrString($tagName);
+        $tagSha = $input->getOption('github-release-tag-sha');
+        Assert::nullOrString($tagSha);
+
+        if (($tagName === null || $tagName === '') && ($tagSha === null || $tagSha === '')) {
+            return null;
+        }
+
+        if ($tagName === null || $tagName === '' || $tagSha === null || $tagSha === '') {
+            throw new RuntimeException('Specify both --github-release-tag=... and --github-release-tag-sha=...');
+        }
+
+        return GitHubReleaseTag::from($tagName, $tagSha);
     }
 
     /** @return non-empty-string|null */

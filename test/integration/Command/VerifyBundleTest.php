@@ -21,6 +21,9 @@ final class VerifyBundleTest extends TestCase
     private const MESSAGE_SIGNATURE_ARTIFACT             = __DIR__ . '/../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST      = 'sha256:a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
     private const MESSAGE_SIGNATURE_CERTIFICATE_IDENTITY = 'https://github.com/sigstore-conformance/extremely-dangerous-public-oidc-beacon/.github/workflows/extremely-dangerous-oidc-beacon.yml@refs/heads/main';
+    private const RELEASE_BUNDLE_FIXTURE                 = __DIR__ . '/../../fixture/pie-1.5.5-release-bundle.json';
+    private const RELEASE_TAG_SHA                        = 'a41ca99acf93460f75a2acd830b2b8f013571e3a';
+    private const RELEASE_PIE_PHAR_DIGEST                = 'sha256:2ca0dff6868f1b53c095625674deef38ac698588e0a25e4321cd834a5b7553bc';
 
     private function commandTester(): CommandTester
     {
@@ -130,6 +133,36 @@ final class VerifyBundleTest extends TestCase
 
         self::assertSame(Command::FAILURE, $statusCode);
         self::assertStringContainsString('predicate type mismatch', $tester->getDisplay());
+    }
+
+    public function testVerifiesAGitHubReleaseBundleWithoutCertificateIdentityOrIssuer(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::RELEASE_BUNDLE_FIXTURE,
+            '--github-release-tag' => '1.5.5',
+            '--github-release-tag-sha' => self::RELEASE_TAG_SHA,
+            'artifact' => self::RELEASE_PIE_PHAR_DIGEST,
+        ]);
+
+        self::assertSame(Command::SUCCESS, $statusCode);
+        self::assertStringContainsString('Verified', $tester->getDisplay());
+    }
+
+    public function testFailsWhenGitHubReleaseTagDoesNotMatch(): void
+    {
+        $tester = $this->commandTester();
+
+        $statusCode = $tester->execute([
+            '--bundle' => self::RELEASE_BUNDLE_FIXTURE,
+            '--github-release-tag' => '1.5.4',
+            '--github-release-tag-sha' => self::RELEASE_TAG_SHA,
+            'artifact' => self::RELEASE_PIE_PHAR_DIGEST,
+        ]);
+
+        self::assertSame(Command::FAILURE, $statusCode);
+        self::assertStringContainsString('release tag mismatch', $tester->getDisplay());
     }
 
     public function testFailsWhenBundleFileDoesNotExist(): void
