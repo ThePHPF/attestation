@@ -6,18 +6,18 @@ namespace ThePhpFoundation\IntegrationTest\Attestation\BundleSource;
 
 use PHPUnit\Framework\TestCase;
 use ThePhpFoundation\Attestation\Bundle;
-use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
+use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance;
 use ThePhpFoundation\Attestation\BundleSource\Exception\MissingAttestation;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 
-/** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle */
-class DownloadGitHubBundleTest extends TestCase
+/** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance */
+class DownloadGitHubProvenanceTest extends TestCase
 {
     private const PIE_PHAR = __DIR__ . '/../../fixture/pie.phar';
 
     public function testDownloadsBundlesForAKnownAttestedArtifact(): void
     {
-        $bundles = DownloadGitHubBundle::factory('php')->getBundles(
+        $bundles = DownloadGitHubProvenance::factory('php')->getBundles(
             FilenameWithChecksum::fromFilename(self::PIE_PHAR),
         );
 
@@ -29,7 +29,7 @@ class DownloadGitHubBundleTest extends TestCase
     public function testThrowsWhenNoAttestationIsFound(): void
     {
         $this->expectException(MissingAttestation::class);
-        DownloadGitHubBundle::factory('php')->getBundles(
+        DownloadGitHubProvenance::factory('php')->getBundles(
             FilenameWithChecksum::fromFilename(__FILE__),
         );
     }

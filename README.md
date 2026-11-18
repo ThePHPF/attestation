@@ -12,7 +12,7 @@ Fetching a bundle from GitHub's Artifact Attestations API and verifying it:
 <?php
 
 use ThePhpFoundation\Attestation\AttestationException;
-use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
+use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use ThePhpFoundation\Attestation\FulcioSigstoreOidExtensions;
 use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
@@ -20,7 +20,7 @@ use ThePhpFoundation\Attestation\Verification\VerifyBundleWithOpenSsl;
 try {
     $file = FilenameWithChecksum::fromFilename($fileYouWantToVerify);
 
-    $bundles = DownloadGitHubBundle::factory('your-org') // the org/user in your GH URL, e.g. https://github.com/your-org
+    $bundles = DownloadGitHubProvenance::factory('your-org') // the org/user in your GH URL, e.g. https://github.com/your-org
         ->getBundles($file);
 
     VerifyBundleWithOpenSsl::factory(
