@@ -11,6 +11,7 @@ use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance;
 use ThePhpFoundation\Attestation\BundleSource\Exception\BundleResponseTooLarge;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToDecompressBundle;
 use ThePhpFoundation\Attestation\BundleSource\Exception\UntrustedBundleUrl;
+use ThePhpFoundation\Attestation\BundleSource\GitHubApi;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use Webmozart\Assert\Assert;
 
@@ -45,7 +46,7 @@ final class DownloadGitHubProvenanceTest extends TestCase
             },
         );
 
-        return new DownloadGitHubProvenance('owner', 'https://api.example.test', $httpDownloader);
+        return new DownloadGitHubProvenance('owner', new GitHubApi('https://api.example.test', $httpDownloader));
     }
 
     public function testThrowsWhenTheCompressedBundleResponseExceedsTheSizeCap(): void
