@@ -7,10 +7,11 @@ namespace ThePhpFoundation\UnitTest\Attestation\BundleSource;
 use Composer\Util\Http\Response;
 use Composer\Util\HttpDownloader;
 use PHPUnit\Framework\TestCase;
-use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle;
+use ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance;
 use ThePhpFoundation\Attestation\BundleSource\Exception\BundleResponseTooLarge;
 use ThePhpFoundation\Attestation\BundleSource\Exception\FailedToDecompressBundle;
 use ThePhpFoundation\Attestation\BundleSource\Exception\UntrustedBundleUrl;
+use ThePhpFoundation\Attestation\BundleSource\GitHubApi;
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
 use Webmozart\Assert\Assert;
 
@@ -18,17 +19,17 @@ use function json_encode;
 use function str_contains;
 use function str_repeat;
 
-/** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubBundle */
-final class DownloadGitHubBundleTest extends TestCase
+/** @covers \ThePhpFoundation\Attestation\BundleSource\DownloadGitHubProvenance */
+final class DownloadGitHubProvenanceTest extends TestCase
 {
     private const BUNDLE_URL = 'https://example.test/bundle';
 
-    private function downloaderReturning(string $bundleResponseBody): DownloadGitHubBundle
+    private function downloaderReturning(string $bundleResponseBody): DownloadGitHubProvenance
     {
         return $this->downloaderWithBundleUrl(self::BUNDLE_URL, $bundleResponseBody);
     }
 
-    private function downloaderWithBundleUrl(string $bundleUrl, string $bundleResponseBody = ''): DownloadGitHubBundle
+    private function downloaderWithBundleUrl(string $bundleUrl, string $bundleResponseBody = ''): DownloadGitHubProvenance
     {
         $httpDownloader = $this->createMock(HttpDownloader::class);
         $httpDownloader->method('get')->willReturnCallback(
@@ -45,7 +46,7 @@ final class DownloadGitHubBundleTest extends TestCase
             },
         );
 
-        return new DownloadGitHubBundle('owner', 'https://api.example.test', $httpDownloader);
+        return new DownloadGitHubProvenance('owner', new GitHubApi('https://api.example.test', $httpDownloader));
     }
 
     public function testThrowsWhenTheCompressedBundleResponseExceedsTheSizeCap(): void

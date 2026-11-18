@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace ThePhpFoundation\Attestation\Verification;
 
 use ThePhpFoundation\Attestation\FilenameWithChecksum;
+use ThePhpFoundation\Attestation\GitHubReleaseTag;
 use ThePhpFoundation\Attestation\Verification\Assertion\ArtifactMatchesBundleContent;
+use ThePhpFoundation\Attestation\Verification\Assertion\BundleHasAtLeastOneRfc3161Timestamp;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleHasAtLeastOneTimestamp;
 use ThePhpFoundation\Attestation\Verification\Assertion\BundleMediaTypeIsSupported;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateExtensionClaims;
@@ -14,7 +16,9 @@ use ThePhpFoundation\Attestation\Verification\Assertion\CertificateIdentity;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateOidcIssuer;
 use ThePhpFoundation\Attestation\Verification\Assertion\CertificateSignedByTrustedRoot;
 use ThePhpFoundation\Attestation\Verification\Assertion\PredicateType;
+use ThePhpFoundation\Attestation\Verification\Assertion\ReleaseTag;
 use ThePhpFoundation\Attestation\Verification\Assertion\Rfc3161TimestampsAreValid;
+use ThePhpFoundation\Attestation\Verification\Assertion\SubjectDigestMatchesReleaseTag;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinCertificateValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesAreWithinTransparencyLogKeyValidity;
 use ThePhpFoundation\Attestation\Verification\Assertion\TransparencyLogEntriesHaveAnInclusionAnchor;
@@ -28,7 +32,8 @@ use ThePhpFoundation\Attestation\Verification\Exception\NoBundlesToVerify;
 
 class VerifyBundleWithOpenSsl implements VerifyBundle
 {
-    private const TRUSTED_ROOT_FILE_PATH = __DIR__ . '/../../resources/trusted-root.jsonl';
+    private const TRUSTED_ROOT_FILE_PATH               = __DIR__ . '/../../resources/trusted-root.jsonl';
+    private const GITHUB_RELEASES_CERTIFICATE_IDENTITY = 'https://dotcom.releases.github.com';
 
     /** @param list<VerifyBundleCheck> $checks */
     private function __construct(private array $checks)
@@ -56,6 +61,22 @@ class VerifyBundleWithOpenSsl implements VerifyBundle
     public static function withTrustedRootFile(string $trustedRootFilePath, array $extensions, string $expectedCertificateIdentity, string $expectedOidcIssuer, string|null $expectedPredicateType): self
     {
         return new self(self::defaultChecks(new TrustedRoot($trustedRootFilePath), $extensions, $expectedCertificateIdentity, $expectedOidcIssuer, $expectedPredicateType));
+    }
+
+    public static function forGitHubRelease(GitHubReleaseTag $tag): self
+    {
+        $trustedRoot = new TrustedRoot(self::TRUSTED_ROOT_FILE_PATH);
+
+        return new self([
+            new BundleMediaTypeIsSupported(),
+            new BundleHasAtLeastOneRfc3161Timestamp(),
+            new Rfc3161TimestampsAreValid($trustedRoot),
+            new CertificateSignedByTrustedRoot($trustedRoot),
+            new CertificateIdentity(self::GITHUB_RELEASES_CERTIFICATE_IDENTITY),
+            new ReleaseTag($tag->tagName()),
+            new SubjectDigestMatchesReleaseTag($tag->sha()),
+            new ArtifactMatchesBundleContent(),
+        ]);
     }
 
     /**

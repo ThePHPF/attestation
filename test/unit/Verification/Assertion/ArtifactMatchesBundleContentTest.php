@@ -31,6 +31,8 @@ final class ArtifactMatchesBundleContentTest extends TestCase
     private const MESSAGE_SIGNATURE_BUNDLE_FIXTURE  = __DIR__ . '/../../../fixture/message-signature-bundle.json';
     private const MESSAGE_SIGNATURE_ARTIFACT        = __DIR__ . '/../../../fixture/message-signature-artifact.txt';
     private const MESSAGE_SIGNATURE_ARTIFACT_DIGEST = 'a0cfc71271d6e278e57cd332ff957c3f7043fdda354c4cbb190a30d56efa01bf';
+    private const RELEASE_BUNDLE_FIXTURE            = __DIR__ . '/../../../fixture/pie-1.5.5-release-bundle.json';
+    private const RELEASE_BUNDLE_PIE_PHAR_DIGEST    = '2ca0dff6868f1b53c095625674deef38ac698588e0a25e4321cd834a5b7553bc';
 
     /** Real bundle for Python 3.9.14 (2022); signed with a P-384 key, but declares a SHA-256 digest. */
     private const P384_HISTORICAL_BUNDLE_FIXTURE  = __DIR__ . '/../../../fixture/python-3.9.14-historical.json';
@@ -112,6 +114,22 @@ final class ArtifactMatchesBundleContentTest extends TestCase
     {
         $this->expectException(DigestMismatch::class);
         self::check()->assert(FilenameWithChecksum::fromFilename(self::MESSAGE_SIGNATURE_ARTIFACT), 0, self::bundle(self::BUNDLE_FIXTURE));
+    }
+
+    public function testAcceptsAValidDsseEnvelopeWhereTheArtifactIsOneOfSeveralSubjects(): void
+    {
+        $this->expectNotToPerformAssertions();
+        self::check()->assert(
+            FilenameWithChecksum::fromFilenameAndChecksum('pie.phar', self::RELEASE_BUNDLE_PIE_PHAR_DIGEST),
+            0,
+            self::bundle(self::RELEASE_BUNDLE_FIXTURE),
+        );
+    }
+
+    public function testRejectsADsseEnvelopeWhereTheArtifactIsNoneOfSeveralSubjects(): void
+    {
+        $this->expectException(DigestMismatch::class);
+        self::check()->assert(FilenameWithChecksum::fromFilename(self::PIE_PHAR), 0, self::bundle(self::RELEASE_BUNDLE_FIXTURE));
     }
 
     public function testRejectsADsseEnvelopeWithAnInvalidSubjectDefinition(): void

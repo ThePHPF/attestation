@@ -21,7 +21,6 @@ use ThePhpFoundation\Attestation\Verification\RawEcdsaDigestVerifier;
 use Webmozart\Assert\Assert;
 
 use function array_key_exists;
-use function count;
 use function extension_loaded;
 use function file_get_contents;
 use function hash_equals;
@@ -161,23 +160,37 @@ final class ArtifactMatchesBundleContent implements VerifyBundleCheck
             ! is_array($decodedPayload)
             || ! array_key_exists('subject', $decodedPayload)
             || ! is_array($decodedPayload['subject'])
-            || count($decodedPayload['subject']) !== 1
-            || ! array_key_exists(0, $decodedPayload['subject'])
-            || ! is_array($decodedPayload['subject'][0])
-            || ! array_key_exists('name', $decodedPayload['subject'][0])
-            || ! array_key_exists('digest', $decodedPayload['subject'][0])
-            || ! is_array($decodedPayload['subject'][0]['digest'])
-            || ! array_key_exists('sha256', $decodedPayload['subject'][0]['digest'])
-            || ! is_string($decodedPayload['subject'][0]['digest']['sha256'])
-            || $decodedPayload['subject'][0]['digest']['sha256'] === ''
         ) {
             throw InvalidSubjectDefinition::new();
         }
 
-        $expected = $file->checksum();
-        $actual   = $decodedPayload['subject'][0]['digest']['sha256'];
-        if (! hash_equals($expected, $actual)) {
-            throw DigestMismatch::fromChecksumMismatch($expected, $actual);
+        $subjectDigests = [];
+        foreach ($decodedPayload['subject'] as $subject) {
+            if (
+                ! is_array($subject)
+                || ! array_key_exists('digest', $subject)
+                || ! is_array($subject['digest'])
+                || ! array_key_exists('sha256', $subject['digest'])
+                || ! is_string($subject['digest']['sha256'])
+                || $subject['digest']['sha256'] === ''
+            ) {
+                continue;
+            }
+
+            $subjectDigests[] = $subject['digest']['sha256'];
         }
+
+        if ($subjectDigests === []) {
+            throw InvalidSubjectDefinition::new();
+        }
+
+        $expected = $file->checksum();
+        foreach ($subjectDigests as $subjectDigest) {
+            if (hash_equals($expected, $subjectDigest)) {
+                return;
+            }
+        }
+
+        throw DigestMismatch::fromNoMatchingSubject($expected, $subjectDigests);
     }
 }

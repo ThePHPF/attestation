@@ -16,4 +16,9 @@ class MissingTimestampEvidence extends FailedToVerifyArtifact
             $bundleIndex,
         ));
     }
+
+    public static function noRfc3161TimestampForIndex(int $bundleIndex): self
+    {
+        return new self(sprintf('Attestation %d has no RFC 3161 timestamp', $bundleIndex));
+    }
 }
